@@ -4,4 +4,4 @@ beautifulsoup4
 fastapi
 uvicorn
 python-multipart
-pydub
+lameenc

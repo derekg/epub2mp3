@@ -8,7 +8,7 @@ import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
 from pocket_tts import TTSModel
-from pydub import AudioSegment
+import lameenc
 import numpy as np
 
 
@@ -138,21 +138,26 @@ def text_to_audio(
 
 
 def convert_wav_to_mp3(wav_data: np.ndarray, sample_rate: int, output_path: str):
-    """Convert WAV numpy array to MP3 file."""
+    """Convert WAV numpy array to MP3 file using lameenc."""
     # Normalize to int16
     if wav_data.dtype != np.int16:
         wav_data = (wav_data * 32767).astype(np.int16)
 
-    # Create AudioSegment from raw data
-    audio = AudioSegment(
-        wav_data.tobytes(),
-        frame_rate=sample_rate,
-        sample_width=2,  # 16-bit
-        channels=1
-    )
+    # Set up encoder
+    encoder = lameenc.Encoder()
+    encoder.set_bit_rate(192)
+    encoder.set_in_sample_rate(sample_rate)
+    encoder.set_out_sample_rate(sample_rate)
+    encoder.set_channels(1)
+    encoder.set_quality(2)  # 2 = high quality
 
-    # Export as MP3
-    audio.export(output_path, format="mp3", bitrate="192k")
+    # Encode to MP3
+    mp3_data = encoder.encode(wav_data.tobytes())
+    mp3_data += encoder.flush()
+
+    # Write to file
+    with open(output_path, 'wb') as f:
+        f.write(mp3_data)
 
 
 def convert_epub_to_mp3(

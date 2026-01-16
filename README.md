@@ -14,7 +14,6 @@ Convert EPUB ebooks to MP3 audiobooks using [Kyutai's Pocket TTS](https://kyutai
 ## Requirements
 
 - Python 3.11+
-- ffmpeg (for MP3 encoding)
 
 ## Installation
 
@@ -25,10 +24,6 @@ cd epub2mp3
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Ensure ffmpeg is installed
-# macOS: brew install ffmpeg
-# Ubuntu: sudo apt install ffmpeg
 ```
 
 ## Usage
