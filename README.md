@@ -4,12 +4,12 @@ Convert EPUB ebooks to MP3 audiobooks using [Kyutai's Pocket TTS](https://kyutai
 
 ## Features
 
-- Drag-and-drop web interface
+- **Web interface** - Drag-and-drop in your browser
+- **CLI** - Batch convert from the command line
 - 8 built-in voices (alba, marius, javert, jean, fantine, cosette, eponine, azelma)
 - Custom voice cloning via WAV file upload
 - Per-chapter or single combined MP3 output
 - Real-time progress tracking
-- Download individual files or all as ZIP
 
 ## Requirements
 
@@ -28,7 +28,30 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Command Line
+
 ```bash
+# Convert an EPUB to MP3 (one file per chapter)
+python cli.py convert book.epub
+
+# Use a different voice
+python cli.py convert book.epub --voice marius
+
+# Combine all chapters into a single MP3
+python cli.py convert book.epub --single-file
+
+# Specify output directory
+python cli.py convert book.epub --output ./audiobooks
+
+# List available voices
+python cli.py voices
+```
+
+### Web Interface
+
+```bash
+python cli.py serve
+# or
 python app.py
 ```
 
@@ -51,12 +74,12 @@ The TTS model (~225MB) is downloaded automatically on first run and cached local
 
 ```
 epub2mp3/
-├── app.py              # FastAPI server
+├── cli.py              # Command-line interface
+├── app.py              # FastAPI web server
 ├── converter.py        # EPUB parsing and TTS conversion
 ├── templates/
 │   └── index.html      # Web UI
-├── requirements.txt    # Python dependencies
-└── README.md
+└── requirements.txt    # Python dependencies
 ```
 
 ## License
