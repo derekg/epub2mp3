@@ -20,7 +20,7 @@ Convert EPUB ebooks to MP3 audiobooks using [Kyutai's Pocket TTS](https://kyutai
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/epub2mp3.git
+git clone https://github.com/derekg/epub2mp3.git
 cd epub2mp3
 
 # Install dependencies
