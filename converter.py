@@ -1,6 +1,7 @@
 """EPUB parsing and TTS conversion module."""
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
@@ -8,6 +9,7 @@ import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
 from pocket_tts import TTSModel
+from mutagen.id3 import ID3, TIT2, TALB, TPE1, TRCK, TCON, COMM
 import lameenc
 import numpy as np
 
@@ -18,15 +20,38 @@ BUILTIN_VOICES = [
 ]
 
 
-def parse_epub(epub_path: str) -> list[tuple[str, str]]:
-    """
-    Parse an EPUB file and extract chapters.
+@dataclass
+class BookMetadata:
+    """Metadata extracted from an EPUB file."""
+    title: str
+    author: str
+    chapters: list[tuple[str, str]]  # (chapter_title, chapter_text)
 
-    Returns a list of (chapter_title, chapter_text) tuples.
+
+def parse_epub(epub_path: str) -> BookMetadata:
+    """
+    Parse an EPUB file and extract metadata and chapters.
+
+    Returns BookMetadata with title, author, and list of chapters.
     """
     book = epub.read_epub(epub_path)
-    chapters = []
 
+    # Extract book metadata
+    book_title = "Unknown Title"
+    book_author = "Unknown Author"
+
+    # Try to get title from metadata
+    title_meta = book.get_metadata('DC', 'title')
+    if title_meta:
+        book_title = title_meta[0][0]
+
+    # Try to get author from metadata
+    author_meta = book.get_metadata('DC', 'creator')
+    if author_meta:
+        book_author = author_meta[0][0]
+
+    # Extract chapters
+    chapters = []
     for item in book.get_items():
         if item.get_type() == ebooklib.ITEM_DOCUMENT:
             content = item.get_content().decode('utf-8', errors='ignore')
@@ -50,7 +75,7 @@ def parse_epub(epub_path: str) -> list[tuple[str, str]]:
             if text and len(text) > 50:  # Skip very short sections
                 chapters.append((title, text))
 
-    return chapters
+    return BookMetadata(title=book_title, author=book_author, chapters=chapters)
 
 
 def clean_text(text: str) -> str:
@@ -160,6 +185,42 @@ def convert_wav_to_mp3(wav_data: np.ndarray, sample_rate: int, output_path: str)
         f.write(mp3_data)
 
 
+def add_id3_tags(
+    mp3_path: str,
+    title: str,
+    album: str,
+    artist: str,
+    track_num: int = None,
+    total_tracks: int = None,
+    voice: str = None,
+):
+    """Add ID3 tags to an MP3 file."""
+    # Create ID3 tag (or load existing)
+    try:
+        tags = ID3(mp3_path)
+    except Exception:
+        tags = ID3()
+
+    # Set tags
+    tags["TIT2"] = TIT2(encoding=3, text=title)  # Title
+    tags["TALB"] = TALB(encoding=3, text=album)  # Album
+    tags["TPE1"] = TPE1(encoding=3, text=artist)  # Artist
+    tags["TCON"] = TCON(encoding=3, text="Audiobook")  # Genre
+
+    # Track number
+    if track_num is not None:
+        track_str = str(track_num)
+        if total_tracks is not None:
+            track_str = f"{track_num}/{total_tracks}"
+        tags["TRCK"] = TRCK(encoding=3, text=track_str)
+
+    # Add comment with voice info
+    if voice:
+        tags["COMM"] = COMM(encoding=3, lang="eng", desc="Voice", text=f"Generated with Pocket TTS ({voice})")
+
+    tags.save(mp3_path)
+
+
 def convert_epub_to_mp3(
     epub_path: str,
     output_dir: str,
@@ -189,9 +250,9 @@ def convert_epub_to_mp3(
     if progress_callback:
         progress_callback(0, 100, "Parsing EPUB...")
 
-    chapters = parse_epub(epub_path)
+    book = parse_epub(epub_path)
 
-    if not chapters:
+    if not book.chapters:
         raise ValueError("No readable chapters found in EPUB")
 
     # Get voice state
@@ -202,11 +263,11 @@ def convert_epub_to_mp3(
     sample_rate = model.sample_rate
 
     output_files = []
+    total_chapters = len(book.chapters)
 
     if per_chapter:
         # One MP3 per chapter
-        total_chapters = len(chapters)
-        for i, (title, text) in enumerate(chapters):
+        for i, (title, text) in enumerate(book.chapters):
             progress_pct = 10 + int((i / total_chapters) * 85)
             safe_title = re.sub(r'[^\w\s-]', '', title)[:50]
             filename = f"{i+1:03d}_{safe_title}.mp3"
@@ -218,6 +279,15 @@ def convert_epub_to_mp3(
             audio = text_to_audio(model, voice_state, text)
             if len(audio) > 0:
                 convert_wav_to_mp3(audio, sample_rate, str(output_path))
+                add_id3_tags(
+                    str(output_path),
+                    title=title,
+                    album=book.title,
+                    artist=book.author,
+                    track_num=i + 1,
+                    total_tracks=total_chapters,
+                    voice=voice,
+                )
                 output_files.append(str(output_path))
     else:
         # Single combined MP3
@@ -225,9 +295,8 @@ def convert_epub_to_mp3(
             progress_callback(10, 100, "Combining chapters...")
 
         all_audio = []
-        total_chapters = len(chapters)
 
-        for i, (title, text) in enumerate(chapters):
+        for i, (title, text) in enumerate(book.chapters):
             progress_pct = 10 + int((i / total_chapters) * 80)
             if progress_callback:
                 progress_callback(progress_pct, 100, f"Converting: {title[:30]}...")
@@ -241,13 +310,19 @@ def convert_epub_to_mp3(
 
         if all_audio:
             combined_audio = np.concatenate(all_audio)
-            epub_name = Path(epub_path).stem
-            output_path = output_dir / f"{epub_name}.mp3"
+            output_path = output_dir / f"{book.title}.mp3"
 
             if progress_callback:
                 progress_callback(95, 100, "Saving MP3...")
 
             convert_wav_to_mp3(combined_audio, sample_rate, str(output_path))
+            add_id3_tags(
+                str(output_path),
+                title=book.title,
+                album=book.title,
+                artist=book.author,
+                voice=voice,
+            )
             output_files.append(str(output_path))
 
     if progress_callback:
