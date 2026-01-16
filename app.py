@@ -6,16 +6,14 @@ import shutil
 import tempfile
 import uuid
 import zipfile
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from pocket_tts import TTSModel
 
 from converter import convert_epub_to_mp3, BUILTIN_VOICES
-
-app = FastAPI(title="EPUB to MP3 Converter")
 
 # Global model instance (loaded once at startup)
 tts_model: TTSModel = None
@@ -24,13 +22,17 @@ tts_model: TTSModel = None
 jobs: dict = {}
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Load the TTS model at startup."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load TTS model on startup."""
     global tts_model
     print("Loading TTS model...")
     tts_model = TTSModel.load_model()
     print("TTS model loaded!")
+    yield
+
+
+app = FastAPI(title="EPUB to MP3 Converter", lifespan=lifespan)
 
 
 @app.get("/", response_class=HTMLResponse)

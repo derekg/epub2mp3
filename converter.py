@@ -1,7 +1,6 @@
 """EPUB parsing and TTS conversion module."""
 
 import re
-import tempfile
 from pathlib import Path
 from typing import Callable
 
