@@ -230,6 +230,7 @@ def convert_epub_to_mp3(
     progress_callback: Callable[[int, int, str], None] = None,
     chapter_indices: list[int] = None,
     skip_existing: bool = False,
+    announce_chapters: bool = False,
 ) -> list[str]:
     """
     Convert an EPUB file to MP3(s).
@@ -243,6 +244,7 @@ def convert_epub_to_mp3(
         progress_callback: Function(current, total, message) for progress updates
         chapter_indices: List of chapter indices to convert (None = all)
         skip_existing: If True, skip chapters that already have output files
+        announce_chapters: If True, speak chapter title at start of each chapter
 
     Returns:
         List of paths to generated MP3 files
@@ -301,7 +303,28 @@ def convert_epub_to_mp3(
             if progress_callback:
                 progress_callback(progress_pct, 100, f"Converting: {title[:30]}...")
 
-            audio = text_to_audio(model, voice_state, text)
+            # Generate chapter announcement if enabled
+            chapter_audio_parts = []
+            if announce_chapters:
+                announcement_text = f"Chapter {idx + 1}. {title}."
+                announcement = text_to_audio(model, voice_state, announcement_text)
+                if len(announcement) > 0:
+                    chapter_audio_parts.append(announcement)
+                    # Add a brief pause after announcement
+                    pause = np.zeros(int(sample_rate * 0.8), dtype=announcement.dtype)
+                    chapter_audio_parts.append(pause)
+
+            # Generate chapter content audio
+            content_audio = text_to_audio(model, voice_state, text)
+            if len(content_audio) > 0:
+                chapter_audio_parts.append(content_audio)
+
+            # Combine announcement and content
+            if chapter_audio_parts:
+                audio = np.concatenate(chapter_audio_parts)
+            else:
+                audio = np.array([])
+
             if len(audio) > 0:
                 convert_wav_to_mp3(audio, sample_rate, str(output_path))
                 add_id3_tags(
@@ -325,6 +348,16 @@ def convert_epub_to_mp3(
             progress_pct = 10 + int((idx / total_chapters) * 80)
             if progress_callback:
                 progress_callback(progress_pct, 100, f"Converting: {title[:30]}...")
+
+            # Generate chapter announcement if enabled
+            if announce_chapters:
+                announcement_text = f"Chapter {idx + 1}. {title}."
+                announcement = text_to_audio(model, voice_state, announcement_text)
+                if len(announcement) > 0:
+                    all_audio.append(announcement)
+                    # Add a brief pause after announcement
+                    pause = np.zeros(int(sample_rate * 0.8), dtype=announcement.dtype)
+                    all_audio.append(pause)
 
             audio = text_to_audio(model, voice_state, text)
             if len(audio) > 0:

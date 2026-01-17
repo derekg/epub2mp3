@@ -47,6 +47,11 @@ def convert(
         "--resume", "-r",
         help="Skip chapters that already have output files (for resuming interrupted conversions)",
     ),
+    announce: bool = typer.Option(
+        False,
+        "--announce", "-a",
+        help="Speak chapter title at the start of each chapter",
+    ),
 ):
     """Convert an EPUB file to MP3 audiobook(s)."""
     from pocket_tts import TTSModel
@@ -62,6 +67,8 @@ def convert(
     console.print(f"  Mode: {'single file' if single_file else 'per chapter'}")
     if resume:
         console.print(f"  Resume: enabled (skipping existing files)")
+    if announce:
+        console.print(f"  Announce: enabled (chapter titles)")
     console.print()
 
     # Load model
@@ -91,6 +98,7 @@ def convert(
                 per_chapter=not single_file,
                 progress_callback=progress_callback,
                 skip_existing=resume,
+                announce_chapters=announce,
             )
         except Exception as e:
             console.print(f"[red]Error:[/red] {e}")
