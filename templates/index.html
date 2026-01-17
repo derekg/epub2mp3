@@ -504,6 +504,15 @@
                         <span>Announce chapter titles</span>
                     </label>
                 </div>
+                <div class="option-row" id="textProcessingRow" style="display: none;">
+                    <label>Text</label>
+                    <select id="textProcessingSelect">
+                        <option value="none">None</option>
+                        <option value="clean">Clean (remove artifacts)</option>
+                        <option value="speed">Speed Read (~30%)</option>
+                        <option value="summary">Summary (~10%)</option>
+                    </select>
+                </div>
             </div>
 
             <button class="primary" id="convertBtn" disabled>Select an EPUB file</button>
@@ -556,7 +565,10 @@
         let chapters = [];
         let currentJobId = null;
         let m4bAvailable = false;
+        let ollamaAvailable = false;
         let previewAudio = null;
+        const textProcessingRow = document.getElementById('textProcessingRow');
+        const textProcessingSelect = document.getElementById('textProcessingSelect');
 
         // Voice preview
         const previewBtn = document.getElementById('previewBtn');
@@ -625,6 +637,11 @@
                     m4bOption.textContent = 'M4B Audiobook (with chapters)';
                 } else {
                     m4bOption.textContent = 'M4B (requires ffmpeg)';
+                }
+                // Show text processing options if Ollama is available
+                ollamaAvailable = data.ollama_available;
+                if (ollamaAvailable) {
+                    textProcessingRow.style.display = 'flex';
                 }
             } catch (e) {
                 console.error('Failed to load capabilities:', e);
@@ -828,6 +845,7 @@
             formData.append('per_chapter', perChapter.checked);
             formData.append('skip_existing', skipExisting.checked);
             formData.append('announce_chapters', announceChapters.checked);
+            formData.append('text_processing', textProcessingSelect.value);
 
             try {
                 const response = await fetch('/api/convert', {

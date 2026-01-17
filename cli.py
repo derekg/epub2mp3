@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 from converter import convert_epub_to_mp3, BUILTIN_VOICES, is_ffmpeg_available
+from text_processor import ProcessingMode, is_ollama_available
 
 app = typer.Typer(
     name="inkvoice",
@@ -57,8 +58,23 @@ def convert(
         "--format", "-f",
         help="Output format: mp3 (per-chapter or combined) or m4b (single file with chapters, requires ffmpeg)",
     ),
+    clean: bool = typer.Option(
+        False,
+        "--clean", "-c",
+        help="Clean text using LLM (remove footnotes, artifacts). Requires Ollama.",
+    ),
+    speed_read: bool = typer.Option(
+        False,
+        "--speed-read",
+        help="Create condensed ~30% summary. Requires Ollama.",
+    ),
+    summary: bool = typer.Option(
+        False,
+        "--summary",
+        help="Create brief ~10% summary. Requires Ollama.",
+    ),
 ):
-    """Convert an EPUB file to MP3 audiobook(s)."""
+    """Convert an EPUB file to audiobook(s)."""
     from pocket_tts import TTSModel
 
     # Validate format
@@ -71,6 +87,20 @@ def convert(
         console.print("[red]Error:[/red] M4B format requires ffmpeg to be installed.")
         console.print("[dim]Install ffmpeg: brew install ffmpeg (macOS) or apt install ffmpeg (Linux)[/dim]")
         raise typer.Exit(1)
+
+    # Determine text processing mode
+    text_processing = ProcessingMode.NONE
+    if summary:
+        text_processing = ProcessingMode.SUMMARY
+    elif speed_read:
+        text_processing = ProcessingMode.SPEED_READ
+    elif clean:
+        text_processing = ProcessingMode.CLEAN
+
+    # Check Ollama availability for LLM features
+    if text_processing != ProcessingMode.NONE and not is_ollama_available():
+        console.print("[yellow]Warning:[/yellow] Ollama not available. Using basic text cleaning.")
+        console.print("[dim]Install Ollama: brew install ollama && ollama serve && ollama pull gemma2:2b[/dim]")
 
     # Set output directory
     if output is None:
@@ -89,6 +119,13 @@ def convert(
     console.print(f"  Voice: {voice}")
     console.print(f"  Output: {output}")
     console.print(f"  Format: {mode_desc}")
+    if text_processing != ProcessingMode.NONE:
+        processing_desc = {
+            ProcessingMode.CLEAN: "clean (remove artifacts)",
+            ProcessingMode.SPEED_READ: "speed read (~30% summary)",
+            ProcessingMode.SUMMARY: "summary (~10%)",
+        }.get(text_processing, text_processing)
+        console.print(f"  Processing: {processing_desc}")
     if resume and format_lower == "mp3" and not single_file:
         console.print(f"  Resume: enabled (skipping existing files)")
     if announce:
@@ -124,6 +161,7 @@ def convert(
                 skip_existing=resume,
                 announce_chapters=announce,
                 output_format=format_lower,
+                text_processing=text_processing,
             )
         except Exception as e:
             console.print(f"[red]Error:[/red] {e}")

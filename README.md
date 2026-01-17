@@ -16,11 +16,13 @@ Turn your ebooks into audiobooks using [Kyutai's Pocket TTS](https://kyutai.org/
 - **MP3 with metadata** - ID3 tags with title, author, chapter, and cover art
 - **Resume support** - Skip already-converted chapters
 - **Chapter announcements** - Optionally speak chapter titles
+- **LLM text processing** - Clean artifacts, create summaries (requires Ollama)
 
 ## Requirements
 
 - Python 3.11+
 - ffmpeg (optional, for M4B format)
+- Ollama (optional, for LLM text processing)
 
 ## Installation
 
@@ -35,6 +37,11 @@ pip install -r requirements.txt
 # Optional: Install ffmpeg for M4B support
 brew install ffmpeg  # macOS
 # or: apt install ffmpeg  # Linux
+
+# Optional: Install Ollama for LLM text processing
+brew install ollama  # macOS
+ollama serve
+ollama pull gemma2:2b
 ```
 
 ## Usage
@@ -74,6 +81,15 @@ python cli.py convert book.epub --announce
 # Resume an interrupted conversion (skip existing files)
 python cli.py convert book.epub --resume
 
+# Clean text with LLM (removes footnotes, artifacts)
+python cli.py convert book.epub --clean
+
+# Create speed read version (~30% summary)
+python cli.py convert book.epub --speed-read
+
+# Create brief summary (~10%)
+python cli.py convert book.epub --summary
+
 # Specify output directory
 python cli.py convert book.epub --output ./audiobooks
 
@@ -91,6 +107,9 @@ python cli.py voices
 | `--single-file` | `-s` | Combine chapters into one MP3 |
 | `--resume` | `-r` | Skip chapters with existing output files |
 | `--announce` | `-a` | Speak chapter title at start of each chapter |
+| `--clean` | `-c` | Clean text with LLM (remove artifacts) |
+| `--speed-read` | | Create ~30% condensed summary |
+| `--summary` | | Create ~10% brief summary |
 
 ## Performance
 
@@ -105,6 +124,7 @@ inkvoice/
 ├── cli.py              # Command-line interface (typer)
 ├── app.py              # FastAPI web server
 ├── converter.py        # EPUB parsing and TTS conversion
+├── text_processor.py   # LLM-powered text cleaning/summarization
 ├── templates/
 │   └── index.html      # Web UI
 └── requirements.txt    # Python dependencies

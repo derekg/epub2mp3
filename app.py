@@ -15,6 +15,7 @@ from pocket_tts import TTSModel
 import lameenc
 
 from converter import convert_epub_to_mp3, parse_epub, BUILTIN_VOICES, is_ffmpeg_available
+from text_processor import ProcessingMode, is_ollama_available
 
 # Store for uploaded EPUBs awaiting conversion
 uploads: dict = {}
@@ -117,6 +118,13 @@ async def get_capabilities():
             "m4b": is_ffmpeg_available(),
         },
         "ffmpeg_available": is_ffmpeg_available(),
+        "ollama_available": is_ollama_available(),
+        "text_processing_modes": [
+            {"value": "none", "label": "None", "description": "No text processing"},
+            {"value": "clean", "label": "Clean", "description": "Remove footnotes, artifacts"},
+            {"value": "speed", "label": "Speed Read", "description": "~30% summary"},
+            {"value": "summary", "label": "Summary", "description": "~10% brief summary"},
+        ],
     }
 
 
@@ -180,6 +188,7 @@ async def start_conversion(
     skip_existing: bool = Form(False),  # Resume support
     announce_chapters: bool = Form(False),  # Chapter announcements
     output_format: str = Form("mp3"),  # mp3 or m4b
+    text_processing: str = Form("none"),  # none, clean, speed, summary
     custom_voice: UploadFile = File(None),
     epub_file: UploadFile = File(None),  # For backwards compatibility
 ):
@@ -234,9 +243,13 @@ async def start_conversion(
         "files": []
     }
 
+    # Validate text processing mode
+    if text_processing not in ("none", "clean", "speed", "summary"):
+        text_processing = "none"
+
     # Run conversion in background
     asyncio.create_task(run_conversion(
-        job_id, epub_path, voice_to_use, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format
+        job_id, epub_path, voice_to_use, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format, text_processing
     ))
 
     return {"job_id": job_id}
@@ -251,6 +264,7 @@ async def run_conversion(
     skip_existing: bool = False,
     announce_chapters: bool = False,
     output_format: str = "mp3",
+    text_processing: str = "none",
 ):
     """Run the conversion in the background."""
     job = jobs[job_id]
@@ -272,6 +286,7 @@ async def run_conversion(
             skip_existing,
             announce_chapters,
             output_format,
+            text_processing,
         )
 
         job["status"] = "complete"

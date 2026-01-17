@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from text_processor import process_chapter, ProcessingMode, is_ollama_available
+
 import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
@@ -594,6 +596,7 @@ def convert_epub_to_mp3(
     skip_existing: bool = False,
     announce_chapters: bool = False,
     output_format: str = "mp3",
+    text_processing: str = "none",
 ) -> list[str]:
     """
     Convert an EPUB file to audio files (MP3 or M4B).
@@ -609,6 +612,7 @@ def convert_epub_to_mp3(
         skip_existing: If True, skip chapters that already have output files
         announce_chapters: If True, speak chapter title at start of each chapter
         output_format: "mp3" or "m4b" (M4B requires ffmpeg, creates single file with chapters)
+        text_processing: "none", "clean", "speed", or "summary" (requires Ollama)
 
     Returns:
         List of paths to generated audio files
@@ -628,6 +632,18 @@ def convert_epub_to_mp3(
     # M4B is always a single file with chapters (per_chapter is ignored)
     if output_format == "m4b":
         per_chapter = False
+
+    # Validate text processing mode
+    text_processing = text_processing.lower()
+    if text_processing not in (ProcessingMode.NONE, ProcessingMode.CLEAN,
+                                ProcessingMode.SPEED_READ, ProcessingMode.SUMMARY):
+        text_processing = ProcessingMode.NONE
+
+    # Check if LLM processing requested but Ollama not available
+    llm_available = is_ollama_available()
+    if text_processing != ProcessingMode.NONE and not llm_available:
+        if progress_callback:
+            progress_callback(0, 100, "Note: Ollama not available, using basic text cleaning")
 
     # Parse EPUB
     if progress_callback:
@@ -682,6 +698,12 @@ def convert_epub_to_mp3(
             if progress_callback:
                 progress_callback(progress_pct, 100, f"Converting: {title[:30]}...")
 
+            # Process text if LLM processing enabled
+            if text_processing != ProcessingMode.NONE:
+                if progress_callback:
+                    progress_callback(progress_pct, 100, f"Processing text: {title[:30]}...")
+                text = process_chapter(text, title, text_processing)
+
             # Generate chapter announcement if enabled
             chapter_audio_parts = []
             if announce_chapters:
@@ -733,6 +755,12 @@ def convert_epub_to_mp3(
             progress_pct = 10 + int((idx / total_chapters) * 80)
             if progress_callback:
                 progress_callback(progress_pct, 100, f"Converting: {title[:30]}...")
+
+            # Process text if LLM processing enabled
+            if text_processing != ProcessingMode.NONE:
+                if progress_callback:
+                    progress_callback(progress_pct, 100, f"Processing text: {title[:30]}...")
+                text = process_chapter(text, title, text_processing)
 
             chapter_audio_parts = []
 
