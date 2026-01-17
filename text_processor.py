@@ -22,9 +22,10 @@ RECOMMENDED_MODELS = [
     ("llama3.2:3b", "Llama 3.2 3B - Alternative, 128K context"),
 ]
 
-# Chunk size for processing (in characters, ~750 words)
-CHUNK_SIZE = 4000
-CHUNK_OVERLAP = 200
+# Chunk size for processing - sized for Gemma 3's 128K context
+# ~8000 words per chunk, most chapters fit in one call
+CHUNK_SIZE = 50000
+CHUNK_OVERLAP = 500
 
 
 def is_ollama_available() -> bool:
@@ -199,7 +200,7 @@ def summarize_text_with_llm(
     target_words = int(word_count * target_percent / 100)
 
     # For very long texts, chunk and summarize each chunk
-    chunks = chunk_text(text, chunk_size=6000)
+    chunks = chunk_text(text)  # Uses CHUNK_SIZE (50K chars, ~8K words)
     summaries = []
 
     for i, chunk in enumerate(chunks):
