@@ -227,7 +227,8 @@ def convert_epub_to_mp3(
     model: TTSModel,
     voice: str = "alba",
     per_chapter: bool = True,
-    progress_callback: Callable[[int, int, str], None] = None
+    progress_callback: Callable[[int, int, str], None] = None,
+    chapter_indices: list[int] = None,
 ) -> list[str]:
     """
     Convert an EPUB file to MP3(s).
@@ -239,6 +240,7 @@ def convert_epub_to_mp3(
         voice: Voice name or custom WAV path
         per_chapter: If True, create one MP3 per chapter; otherwise combine all
         progress_callback: Function(current, total, message) for progress updates
+        chapter_indices: List of chapter indices to convert (None = all)
 
     Returns:
         List of paths to generated MP3 files
@@ -255,6 +257,18 @@ def convert_epub_to_mp3(
     if not book.chapters:
         raise ValueError("No readable chapters found in EPUB")
 
+    # Filter chapters if indices provided
+    if chapter_indices is not None:
+        selected_chapters = [
+            (i, book.chapters[i]) for i in chapter_indices
+            if 0 <= i < len(book.chapters)
+        ]
+    else:
+        selected_chapters = list(enumerate(book.chapters))
+
+    if not selected_chapters:
+        raise ValueError("No chapters selected for conversion")
+
     # Get voice state
     if progress_callback:
         progress_callback(5, 100, "Loading voice...")
@@ -263,14 +277,14 @@ def convert_epub_to_mp3(
     sample_rate = model.sample_rate
 
     output_files = []
-    total_chapters = len(book.chapters)
+    total_chapters = len(selected_chapters)
 
     if per_chapter:
         # One MP3 per chapter
-        for i, (title, text) in enumerate(book.chapters):
-            progress_pct = 10 + int((i / total_chapters) * 85)
+        for idx, (orig_idx, (title, text)) in enumerate(selected_chapters):
+            progress_pct = 10 + int((idx / total_chapters) * 85)
             safe_title = re.sub(r'[^\w\s-]', '', title)[:50]
-            filename = f"{i+1:03d}_{safe_title}.mp3"
+            filename = f"{idx+1:03d}_{safe_title}.mp3"
             output_path = output_dir / filename
 
             if progress_callback:
@@ -284,7 +298,7 @@ def convert_epub_to_mp3(
                     title=title,
                     album=book.title,
                     artist=book.author,
-                    track_num=i + 1,
+                    track_num=idx + 1,
                     total_tracks=total_chapters,
                     voice=voice,
                 )
@@ -296,8 +310,8 @@ def convert_epub_to_mp3(
 
         all_audio = []
 
-        for i, (title, text) in enumerate(book.chapters):
-            progress_pct = 10 + int((i / total_chapters) * 80)
+        for idx, (orig_idx, (title, text)) in enumerate(selected_chapters):
+            progress_pct = 10 + int((idx / total_chapters) * 80)
             if progress_callback:
                 progress_callback(progress_pct, 100, f"Converting: {title[:30]}...")
 

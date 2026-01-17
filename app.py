@@ -13,7 +13,10 @@ from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pocket_tts import TTSModel
 
-from converter import convert_epub_to_mp3, BUILTIN_VOICES
+from converter import convert_epub_to_mp3, parse_epub, BUILTIN_VOICES
+
+# Store for uploaded EPUBs awaiting conversion
+uploads: dict = {}
 
 # Global model instance (loaded once at startup)
 tts_model: TTSModel = None
@@ -48,23 +51,80 @@ async def get_voices():
     return {"voices": BUILTIN_VOICES}
 
 
+@app.post("/api/upload")
+async def upload_epub(epub_file: UploadFile = File(...)):
+    """Upload an EPUB and get chapter list for selection."""
+    upload_id = str(uuid.uuid4())
+
+    # Create temp directory
+    upload_dir = Path(tempfile.mkdtemp(prefix=f"epub2mp3_upload_{upload_id}_"))
+    epub_path = upload_dir / "input.epub"
+
+    # Save uploaded file
+    with open(epub_path, "wb") as f:
+        shutil.copyfileobj(epub_file.file, f)
+
+    # Parse EPUB to get chapters
+    try:
+        book = parse_epub(str(epub_path))
+    except Exception as e:
+        shutil.rmtree(upload_dir)
+        raise HTTPException(status_code=400, detail=f"Failed to parse EPUB: {e}")
+
+    # Store upload info
+    uploads[upload_id] = {
+        "epub_path": str(epub_path),
+        "upload_dir": upload_dir,
+        "book": book,
+    }
+
+    # Return chapter list
+    chapters = [
+        {"index": i, "title": title, "length": len(text)}
+        for i, (title, text) in enumerate(book.chapters)
+    ]
+
+    return {
+        "upload_id": upload_id,
+        "title": book.title,
+        "author": book.author,
+        "chapters": chapters,
+    }
+
+
 @app.post("/api/convert")
 async def start_conversion(
-    epub_file: UploadFile = File(...),
+    upload_id: str = Form(None),
+    selected_chapters: str = Form(None),  # JSON array of indices
     voice: str = Form("alba"),
     per_chapter: bool = Form(True),
-    custom_voice: UploadFile = File(None)
+    custom_voice: UploadFile = File(None),
+    epub_file: UploadFile = File(None),  # For backwards compatibility
 ):
     """Start EPUB to MP3 conversion."""
     job_id = str(uuid.uuid4())
-
-    # Create temp directory for this job
     job_dir = Path(tempfile.mkdtemp(prefix=f"epub2mp3_{job_id}_"))
 
-    # Save uploaded EPUB
-    epub_path = job_dir / "input.epub"
-    with open(epub_path, "wb") as f:
-        shutil.copyfileobj(epub_file.file, f)
+    # Get EPUB path from upload_id or direct upload
+    if upload_id and upload_id in uploads:
+        upload = uploads[upload_id]
+        epub_path = upload["epub_path"]
+        # Parse selected chapters
+        chapter_indices = None
+        if selected_chapters:
+            try:
+                chapter_indices = json.loads(selected_chapters)
+            except json.JSONDecodeError:
+                pass
+    elif epub_file and epub_file.filename:
+        # Direct upload (backwards compatible)
+        epub_path = job_dir / "input.epub"
+        with open(epub_path, "wb") as f:
+            shutil.copyfileobj(epub_file.file, f)
+        epub_path = str(epub_path)
+        chapter_indices = None
+    else:
+        raise HTTPException(status_code=400, detail="No EPUB file provided")
 
     # Handle custom voice if provided
     voice_to_use = voice
@@ -86,13 +146,19 @@ async def start_conversion(
 
     # Run conversion in background
     asyncio.create_task(run_conversion(
-        job_id, str(epub_path), voice_to_use, per_chapter
+        job_id, epub_path, voice_to_use, per_chapter, chapter_indices
     ))
 
     return {"job_id": job_id}
 
 
-async def run_conversion(job_id: str, epub_path: str, voice: str, per_chapter: bool):
+async def run_conversion(
+    job_id: str,
+    epub_path: str,
+    voice: str,
+    per_chapter: bool,
+    chapter_indices: list[int] = None
+):
     """Run the conversion in the background."""
     job = jobs[job_id]
 
@@ -108,7 +174,8 @@ async def run_conversion(job_id: str, epub_path: str, voice: str, per_chapter: b
             tts_model,
             voice,
             per_chapter,
-            progress_callback
+            progress_callback,
+            chapter_indices,
         )
 
         job["status"] = "complete"
