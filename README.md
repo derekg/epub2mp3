@@ -8,7 +8,7 @@ Turn your ebooks into audiobooks using [Kyutai's Pocket TTS](https://kyutai.org/
 - **CLI** - Batch convert from the command line
 - **8 built-in voices** - Alba, Marius, Javert, Jean, Fantine, Cosette, Eponine, Azelma
 - **Voice preview** - Listen to voices before converting
-- **Custom voice cloning** - Upload a WAV file to clone any voice
+- **Custom voice cloning** - Use any WAV file to clone a voice (CLI only)
 - **Chapter selection** - Choose which chapters to convert
 - **Smart EPUB parsing** - TOC-first parsing with intelligent chapter detection
 - **Front/back matter detection** - Auto-deselects title pages, copyright, acknowledgements, etc.
