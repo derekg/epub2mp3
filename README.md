@@ -90,6 +90,12 @@ python cli.py convert book.epub --speed-read
 # Create brief summary (~10%)
 python cli.py convert book.epub --summary
 
+# Use a different LLM model (faster)
+python cli.py convert book.epub --clean --model gemma3:1b
+
+# List available LLM models
+python cli.py models
+
 # Specify output directory
 python cli.py convert book.epub --output ./audiobooks
 
@@ -110,6 +116,7 @@ python cli.py voices
 | `--clean` | `-c` | Clean text with LLM (remove artifacts) |
 | `--speed-read` | | Create ~30% condensed summary |
 | `--summary` | | Create ~10% brief summary |
+| `--model` | `-m` | LLM model (default: gemma3:4b) |
 
 ## Performance
 

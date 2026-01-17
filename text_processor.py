@@ -11,8 +11,16 @@ except ImportError:
     OLLAMA_AVAILABLE = False
 
 
-# Default model - Gemma 3 1B is small, fast, and has 32K context
-DEFAULT_MODEL = "gemma3:1b"
+# Default model - Gemma 3 4B has great quality and 128K context
+DEFAULT_MODEL = "gemma3:4b"
+
+# Alternative models users can choose from
+RECOMMENDED_MODELS = [
+    ("gemma3:4b", "Gemma 3 4B - Best quality, 128K context (default)"),
+    ("gemma3:1b", "Gemma 3 1B - Fastest, 32K context, lower memory"),
+    ("gemma3:12b", "Gemma 3 12B - Highest quality, needs more VRAM"),
+    ("llama3.2:3b", "Llama 3.2 3B - Alternative, 128K context"),
+]
 
 # Chunk size for processing (in characters, ~750 words)
 CHUNK_SIZE = 4000

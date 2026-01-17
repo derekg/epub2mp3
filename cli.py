@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 from converter import convert_epub_to_mp3, BUILTIN_VOICES, is_ffmpeg_available
-from text_processor import ProcessingMode, is_ollama_available
+from text_processor import ProcessingMode, is_ollama_available, DEFAULT_MODEL, RECOMMENDED_MODELS
 
 app = typer.Typer(
     name="inkvoice",
@@ -73,6 +73,11 @@ def convert(
         "--summary",
         help="Create brief ~10% summary. Requires Ollama.",
     ),
+    model: str = typer.Option(
+        DEFAULT_MODEL,
+        "--model", "-m",
+        help=f"LLM model for text processing. Default: {DEFAULT_MODEL}. Try: gemma3:1b (faster), gemma3:12b (better).",
+    ),
 ):
     """Convert an EPUB file to audiobook(s)."""
     from pocket_tts import TTSModel
@@ -132,9 +137,9 @@ def convert(
         console.print(f"  Announce: enabled (chapter titles)")
     console.print()
 
-    # Load model
+    # Load TTS model
     with console.status("[bold green]Loading TTS model..."):
-        model = TTSModel.load_model()
+        tts_model = TTSModel.load_model()
     console.print("[green]✓[/green] Model loaded")
 
     # Convert with progress bar
@@ -154,7 +159,7 @@ def convert(
             output_files = convert_epub_to_mp3(
                 epub_path=str(epub_file),
                 output_dir=str(output),
-                model=model,
+                model=tts_model,
                 voice=voice,
                 per_chapter=not single_file,
                 progress_callback=progress_callback,
@@ -162,6 +167,7 @@ def convert(
                 announce_chapters=announce,
                 output_format=format_lower,
                 text_processing=text_processing,
+                llm_model=model,
             )
         except Exception as e:
             console.print(f"[red]Error:[/red] {e}")
@@ -182,6 +188,28 @@ def voices():
         console.print(f"  • {voice}")
     console.print()
     console.print("[dim]You can also use a path to a WAV file for voice cloning.[/dim]")
+
+
+@app.command()
+def models():
+    """List recommended LLM models for text processing."""
+    from text_processor import get_available_models
+
+    console.print("[bold]Recommended LLM models:[/bold]")
+    for model_name, description in RECOMMENDED_MODELS:
+        console.print(f"  • [cyan]{model_name}[/cyan] - {description}")
+
+    console.print()
+
+    # Check what's actually installed
+    available = get_available_models()
+    if available:
+        console.print("[bold]Installed in Ollama:[/bold]")
+        for m in available:
+            console.print(f"  • {m}")
+    else:
+        console.print("[yellow]Ollama not running or no models installed.[/yellow]")
+        console.print("[dim]Install: brew install ollama && ollama serve && ollama pull gemma3:4b[/dim]")
 
 
 @app.command()

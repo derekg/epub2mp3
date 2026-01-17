@@ -15,7 +15,7 @@ from pocket_tts import TTSModel
 import lameenc
 
 from converter import convert_epub_to_mp3, parse_epub, BUILTIN_VOICES, is_ffmpeg_available
-from text_processor import ProcessingMode, is_ollama_available
+from text_processor import ProcessingMode, is_ollama_available, DEFAULT_MODEL, RECOMMENDED_MODELS
 
 # Store for uploaded EPUBs awaiting conversion
 uploads: dict = {}
@@ -125,6 +125,10 @@ async def get_capabilities():
             {"value": "speed", "label": "Speed Read", "description": "~30% summary"},
             {"value": "summary", "label": "Summary", "description": "~10% brief summary"},
         ],
+        "llm_models": [
+            {"value": model, "label": desc} for model, desc in RECOMMENDED_MODELS
+        ],
+        "default_llm_model": DEFAULT_MODEL,
     }
 
 
@@ -189,6 +193,7 @@ async def start_conversion(
     announce_chapters: bool = Form(False),  # Chapter announcements
     output_format: str = Form("mp3"),  # mp3 or m4b
     text_processing: str = Form("none"),  # none, clean, speed, summary
+    llm_model: str = Form(None),  # LLM model for text processing
     custom_voice: UploadFile = File(None),
     epub_file: UploadFile = File(None),  # For backwards compatibility
 ):
@@ -247,9 +252,13 @@ async def start_conversion(
     if text_processing not in ("none", "clean", "speed", "summary"):
         text_processing = "none"
 
+    # Use default LLM model if not specified
+    if llm_model is None:
+        llm_model = DEFAULT_MODEL
+
     # Run conversion in background
     asyncio.create_task(run_conversion(
-        job_id, epub_path, voice_to_use, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format, text_processing
+        job_id, epub_path, voice_to_use, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format, text_processing, llm_model
     ))
 
     return {"job_id": job_id}
@@ -265,6 +274,7 @@ async def run_conversion(
     announce_chapters: bool = False,
     output_format: str = "mp3",
     text_processing: str = "none",
+    llm_model: str = None,
 ):
     """Run the conversion in the background."""
     job = jobs[job_id]
@@ -287,6 +297,7 @@ async def run_conversion(
             announce_chapters,
             output_format,
             text_processing,
+            llm_model,
         )
 
         job["status"] = "complete"

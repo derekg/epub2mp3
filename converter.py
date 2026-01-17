@@ -597,6 +597,7 @@ def convert_epub_to_mp3(
     announce_chapters: bool = False,
     output_format: str = "mp3",
     text_processing: str = "none",
+    llm_model: str = None,
 ) -> list[str]:
     """
     Convert an EPUB file to audio files (MP3 or M4B).
@@ -613,6 +614,7 @@ def convert_epub_to_mp3(
         announce_chapters: If True, speak chapter title at start of each chapter
         output_format: "mp3" or "m4b" (M4B requires ffmpeg, creates single file with chapters)
         text_processing: "none", "clean", "speed", or "summary" (requires Ollama)
+        llm_model: Ollama model for text processing (default: gemma3:4b)
 
     Returns:
         List of paths to generated audio files
@@ -702,7 +704,7 @@ def convert_epub_to_mp3(
             if text_processing != ProcessingMode.NONE:
                 if progress_callback:
                     progress_callback(progress_pct, 100, f"Processing text: {title[:30]}...")
-                text = process_chapter(text, title, text_processing)
+                text = process_chapter(text, title, text_processing, model=llm_model)
 
             # Generate chapter announcement if enabled
             chapter_audio_parts = []
@@ -760,7 +762,7 @@ def convert_epub_to_mp3(
             if text_processing != ProcessingMode.NONE:
                 if progress_callback:
                     progress_callback(progress_pct, 100, f"Processing text: {title[:30]}...")
-                text = process_chapter(text, title, text_processing)
+                text = process_chapter(text, title, text_processing, model=llm_model)
 
             chapter_audio_parts = []
 

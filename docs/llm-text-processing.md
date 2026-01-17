@@ -45,7 +45,7 @@ Create condensed versions:
 | **Phi-3-mini** | 2.3GB | 4K | Fast | Good | Microsoft, MIT |
 | **Llama-3.2-1B** | 1.3GB | 8K | Fast | OK | Meta |
 
-**Recommendation**: Start with **Gemma 3 1B** via Ollama - smallest, fastest, and has 32K context (4x more than Gemma 2).
+**Recommendation**: Default is **Gemma 3 4B** for best quality (128K context). Use `--model gemma3:1b` for faster processing on lower-memory systems.
 
 ## Implementation Options
 
@@ -60,7 +60,7 @@ import ollama
 
 def clean_text_with_llm(text: str) -> str:
     response = ollama.generate(
-        model='gemma3:1b',
+        model='gemma3:4b',
         prompt=f"""Clean this text for text-to-speech. Remove:
 - Footnote markers like [1], [2]
 - Page numbers
