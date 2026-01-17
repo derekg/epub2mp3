@@ -504,7 +504,7 @@
                         <span>Announce chapter titles</span>
                     </label>
                 </div>
-                <div class="option-row" id="textProcessingRow" style="display: none;">
+                <div class="option-row" id="textProcessingRow">
                     <label>Text</label>
                     <select id="textProcessingSelect">
                         <option value="none">None</option>
@@ -513,6 +513,14 @@
                         <option value="summary">Summary (~10%)</option>
                     </select>
                 </div>
+                <div class="option-row" id="llmModelRow" style="display: none;">
+                    <label>Model</label>
+                    <select id="llmModelSelect">
+                    </select>
+                </div>
+                <p class="ollama-note" id="ollamaNote" style="display: none; font-size: 0.8rem; color: var(--text-dim); margin: -8px 0 16px 0;">
+                    <span id="ollamaStatus"></span>
+                </p>
             </div>
 
             <button class="primary" id="convertBtn" disabled>Select an EPUB file</button>
@@ -567,8 +575,29 @@
         let m4bAvailable = false;
         let ollamaAvailable = false;
         let previewAudio = null;
+        let defaultLlmModel = 'gemma3:4b';
         const textProcessingRow = document.getElementById('textProcessingRow');
         const textProcessingSelect = document.getElementById('textProcessingSelect');
+        const llmModelRow = document.getElementById('llmModelRow');
+        const llmModelSelect = document.getElementById('llmModelSelect');
+        const ollamaNote = document.getElementById('ollamaNote');
+        const ollamaStatus = document.getElementById('ollamaStatus');
+
+        // Show/hide model selection based on text processing choice
+        textProcessingSelect.addEventListener('change', () => {
+            const needsLlm = textProcessingSelect.value !== 'none';
+            llmModelRow.style.display = needsLlm && ollamaAvailable ? 'flex' : 'none';
+            // Show warning if LLM selected but Ollama not available
+            if (needsLlm && !ollamaAvailable) {
+                ollamaNote.style.display = 'block';
+                ollamaStatus.innerHTML = '⚠️ Ollama not running. Will use basic regex cleaning instead. <a href="https://ollama.com" target="_blank" style="color: var(--ink);">Install Ollama</a>';
+            } else if (needsLlm && ollamaAvailable) {
+                ollamaNote.style.display = 'block';
+                ollamaStatus.textContent = '✓ Ollama connected';
+            } else {
+                ollamaNote.style.display = 'none';
+            }
+        });
 
         // Voice preview
         const previewBtn = document.getElementById('previewBtn');
@@ -638,10 +667,23 @@
                 } else {
                     m4bOption.textContent = 'M4B (requires ffmpeg)';
                 }
-                // Show text processing options if Ollama is available
+
+                // Track Ollama availability
                 ollamaAvailable = data.ollama_available;
-                if (ollamaAvailable) {
-                    textProcessingRow.style.display = 'flex';
+
+                // Populate LLM model dropdown
+                if (data.llm_models && data.llm_models.length > 0) {
+                    llmModelSelect.innerHTML = '';
+                    data.llm_models.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m.value;
+                        opt.textContent = m.label;
+                        llmModelSelect.appendChild(opt);
+                    });
+                }
+                if (data.default_llm_model) {
+                    defaultLlmModel = data.default_llm_model;
+                    llmModelSelect.value = defaultLlmModel;
                 }
             } catch (e) {
                 console.error('Failed to load capabilities:', e);
@@ -846,6 +888,7 @@
             formData.append('skip_existing', skipExisting.checked);
             formData.append('announce_chapters', announceChapters.checked);
             formData.append('text_processing', textProcessingSelect.value);
+            formData.append('llm_model', llmModelSelect.value || defaultLlmModel);
 
             try {
                 const response = await fetch('/api/convert', {
