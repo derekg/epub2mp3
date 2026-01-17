@@ -98,6 +98,7 @@ async def start_conversion(
     selected_chapters: str = Form(None),  # JSON array of indices
     voice: str = Form("alba"),
     per_chapter: bool = Form(True),
+    skip_existing: bool = Form(False),  # Resume support
     custom_voice: UploadFile = File(None),
     epub_file: UploadFile = File(None),  # For backwards compatibility
 ):
@@ -146,7 +147,7 @@ async def start_conversion(
 
     # Run conversion in background
     asyncio.create_task(run_conversion(
-        job_id, epub_path, voice_to_use, per_chapter, chapter_indices
+        job_id, epub_path, voice_to_use, per_chapter, chapter_indices, skip_existing
     ))
 
     return {"job_id": job_id}
@@ -157,7 +158,8 @@ async def run_conversion(
     epub_path: str,
     voice: str,
     per_chapter: bool,
-    chapter_indices: list[int] = None
+    chapter_indices: list[int] = None,
+    skip_existing: bool = False,
 ):
     """Run the conversion in the background."""
     job = jobs[job_id]
@@ -176,6 +178,7 @@ async def run_conversion(
             per_chapter,
             progress_callback,
             chapter_indices,
+            skip_existing,
         )
 
         job["status"] = "complete"

@@ -318,6 +318,12 @@
                         <span>One MP3 per chapter</span>
                     </label>
                 </div>
+                <div class="option-row">
+                    <label class="checkbox-row">
+                        <input type="checkbox" id="skipExisting">
+                        <span>Skip existing files (resume)</span>
+                    </label>
+                </div>
             </div>
 
             <button class="primary" id="convertBtn" disabled>Select an EPUB file</button>
@@ -350,6 +356,7 @@
         const optionsSection = document.getElementById('optionsSection');
         const voiceSelect = document.getElementById('voiceSelect');
         const perChapter = document.getElementById('perChapter');
+        const skipExisting = document.getElementById('skipExisting');
         const convertBtn = document.getElementById('convertBtn');
         const progressSection = document.getElementById('progressSection');
         const progressFill = document.getElementById('progressFill');
@@ -493,6 +500,7 @@
             formData.append('selected_chapters', JSON.stringify(selected));
             formData.append('voice', voiceSelect.value);
             formData.append('per_chapter', perChapter.checked);
+            formData.append('skip_existing', skipExisting.checked);
 
             try {
                 const response = await fetch('/api/convert', {

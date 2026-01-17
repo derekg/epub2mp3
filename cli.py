@@ -42,6 +42,11 @@ def convert(
         "--single-file", "-s",
         help="Combine all chapters into a single MP3 file",
     ),
+    resume: bool = typer.Option(
+        False,
+        "--resume", "-r",
+        help="Skip chapters that already have output files (for resuming interrupted conversions)",
+    ),
 ):
     """Convert an EPUB file to MP3 audiobook(s)."""
     from pocket_tts import TTSModel
@@ -55,6 +60,8 @@ def convert(
     console.print(f"  Voice: {voice}")
     console.print(f"  Output: {output}")
     console.print(f"  Mode: {'single file' if single_file else 'per chapter'}")
+    if resume:
+        console.print(f"  Resume: enabled (skipping existing files)")
     console.print()
 
     # Load model
@@ -83,6 +90,7 @@ def convert(
                 voice=voice,
                 per_chapter=not single_file,
                 progress_callback=progress_callback,
+                skip_existing=resume,
             )
         except Exception as e:
             console.print(f"[red]Error:[/red] {e}")

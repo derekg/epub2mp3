@@ -229,6 +229,7 @@ def convert_epub_to_mp3(
     per_chapter: bool = True,
     progress_callback: Callable[[int, int, str], None] = None,
     chapter_indices: list[int] = None,
+    skip_existing: bool = False,
 ) -> list[str]:
     """
     Convert an EPUB file to MP3(s).
@@ -241,6 +242,7 @@ def convert_epub_to_mp3(
         per_chapter: If True, create one MP3 per chapter; otherwise combine all
         progress_callback: Function(current, total, message) for progress updates
         chapter_indices: List of chapter indices to convert (None = all)
+        skip_existing: If True, skip chapters that already have output files
 
     Returns:
         List of paths to generated MP3 files
@@ -278,6 +280,7 @@ def convert_epub_to_mp3(
 
     output_files = []
     total_chapters = len(selected_chapters)
+    skipped_count = 0
 
     if per_chapter:
         # One MP3 per chapter
@@ -286,6 +289,14 @@ def convert_epub_to_mp3(
             safe_title = re.sub(r'[^\w\s-]', '', title)[:50]
             filename = f"{idx+1:03d}_{safe_title}.mp3"
             output_path = output_dir / filename
+
+            # Skip if file exists and skip_existing is enabled
+            if skip_existing and output_path.exists() and output_path.stat().st_size > 0:
+                skipped_count += 1
+                if progress_callback:
+                    progress_callback(progress_pct, 100, f"Skipping (exists): {title[:30]}...")
+                output_files.append(str(output_path))
+                continue
 
             if progress_callback:
                 progress_callback(progress_pct, 100, f"Converting: {title[:30]}...")
@@ -340,6 +351,9 @@ def convert_epub_to_mp3(
             output_files.append(str(output_path))
 
     if progress_callback:
-        progress_callback(100, 100, "Done!")
+        if per_chapter and skip_existing and skipped_count > 0:
+            progress_callback(100, 100, f"Done! ({skipped_count} chapters skipped)")
+        else:
+            progress_callback(100, 100, "Done!")
 
     return output_files
