@@ -12,8 +12,9 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pocket_tts import TTSModel
+import lameenc
 
-from converter import convert_epub_to_mp3, parse_epub, BUILTIN_VOICES
+from converter import convert_epub_to_mp3, parse_epub, BUILTIN_VOICES, is_ffmpeg_available
 
 # Store for uploaded EPUBs awaiting conversion
 uploads: dict = {}
@@ -35,7 +36,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="EPUB to MP3 Converter", lifespan=lifespan)
+app = FastAPI(title="Inkvoice", lifespan=lifespan)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -49,6 +50,74 @@ async def index():
 async def get_voices():
     """Return list of available voices."""
     return {"voices": BUILTIN_VOICES}
+
+
+# Cache for voice previews
+voice_preview_cache: dict[str, bytes] = {}
+
+
+@app.get("/api/voice-preview/{voice}")
+async def get_voice_preview(voice: str):
+    """Generate a short audio preview for a voice."""
+    from fastapi.responses import Response
+    import numpy as np
+
+    if voice not in BUILTIN_VOICES:
+        raise HTTPException(status_code=404, detail="Voice not found")
+
+    # Check cache first
+    if voice in voice_preview_cache:
+        return Response(
+            content=voice_preview_cache[voice],
+            media_type="audio/mpeg",
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+
+    # Generate preview
+    preview_text = f"Hello, I'm {voice}. I'll be reading your book."
+
+    try:
+        voice_state = tts_model.get_state_for_audio_prompt(voice)
+        audio = tts_model.generate_audio(voice_state, preview_text)
+        audio_np = audio.numpy()
+
+        # Convert to MP3
+        if audio_np.dtype != np.int16:
+            audio_np = (audio_np * 32767).astype(np.int16)
+
+        encoder = lameenc.Encoder()
+        encoder.set_bit_rate(128)
+        encoder.set_in_sample_rate(tts_model.sample_rate)
+        encoder.set_out_sample_rate(tts_model.sample_rate)
+        encoder.set_channels(1)
+        encoder.set_quality(2)
+
+        mp3_data = encoder.encode(audio_np.tobytes())
+        mp3_data += encoder.flush()
+
+        # Convert to bytes and cache
+        mp3_bytes = bytes(mp3_data)
+        voice_preview_cache[voice] = mp3_bytes
+
+        return Response(
+            content=mp3_bytes,
+            media_type="audio/mpeg",
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate preview: {e}")
+
+
+@app.get("/api/capabilities")
+async def get_capabilities():
+    """Return server capabilities (e.g., available formats)."""
+    return {
+        "formats": {
+            "mp3": True,
+            "m4b": is_ffmpeg_available(),
+        },
+        "ffmpeg_available": is_ffmpeg_available(),
+    }
 
 
 @app.post("/api/upload")
@@ -110,10 +179,19 @@ async def start_conversion(
     per_chapter: bool = Form(True),
     skip_existing: bool = Form(False),  # Resume support
     announce_chapters: bool = Form(False),  # Chapter announcements
+    output_format: str = Form("mp3"),  # mp3 or m4b
     custom_voice: UploadFile = File(None),
     epub_file: UploadFile = File(None),  # For backwards compatibility
 ):
-    """Start EPUB to MP3 conversion."""
+    """Start EPUB to audio conversion (MP3 or M4B)."""
+    # Validate output format
+    output_format = output_format.lower()
+    if output_format not in ("mp3", "m4b"):
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {output_format}")
+
+    if output_format == "m4b" and not is_ffmpeg_available():
+        raise HTTPException(status_code=400, detail="M4B format requires ffmpeg (not installed on server)")
+
     job_id = str(uuid.uuid4())
     job_dir = Path(tempfile.mkdtemp(prefix=f"epub2mp3_{job_id}_"))
 
@@ -158,7 +236,7 @@ async def start_conversion(
 
     # Run conversion in background
     asyncio.create_task(run_conversion(
-        job_id, epub_path, voice_to_use, per_chapter, chapter_indices, skip_existing, announce_chapters
+        job_id, epub_path, voice_to_use, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format
     ))
 
     return {"job_id": job_id}
@@ -172,6 +250,7 @@ async def run_conversion(
     chapter_indices: list[int] = None,
     skip_existing: bool = False,
     announce_chapters: bool = False,
+    output_format: str = "mp3",
 ):
     """Run the conversion in the background."""
     job = jobs[job_id]
@@ -192,6 +271,7 @@ async def run_conversion(
             chapter_indices,
             skip_existing,
             announce_chapters,
+            output_format,
         )
 
         job["status"] = "complete"
@@ -258,7 +338,7 @@ async def stream_progress(job_id: str):
 
 @app.get("/api/download/{job_id}/{filename}")
 async def download_file(job_id: str, filename: str):
-    """Download a generated MP3 file."""
+    """Download a generated audio file."""
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -268,9 +348,15 @@ async def download_file(job_id: str, filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
+    # Determine MIME type based on extension
+    if filename.lower().endswith('.m4b'):
+        media_type = "audio/x-m4b"
+    else:
+        media_type = "audio/mpeg"
+
     return FileResponse(
         str(file_path),
-        media_type="audio/mpeg",
+        media_type=media_type,
         filename=filename
     )
 

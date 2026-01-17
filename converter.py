@@ -1,6 +1,9 @@
 """EPUB parsing and TTS conversion module."""
 
 import re
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -301,6 +304,141 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 
+def is_ffmpeg_available() -> bool:
+    """Check if ffmpeg is available on the system."""
+    return shutil.which('ffmpeg') is not None
+
+
+def create_m4b_with_chapters(
+    audio_segments: list[tuple[str, np.ndarray]],  # (chapter_title, audio_data)
+    output_path: str,
+    sample_rate: int,
+    title: str,
+    author: str,
+    cover_image: bytes = None,
+    cover_mime: str = None,
+) -> bool:
+    """
+    Create an M4B audiobook file with embedded chapter markers.
+
+    Args:
+        audio_segments: List of (chapter_title, audio_data) tuples
+        output_path: Path for the output M4B file
+        sample_rate: Audio sample rate
+        title: Book title
+        author: Book author
+        cover_image: Optional cover image data
+        cover_mime: MIME type of cover image
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not is_ffmpeg_available():
+        return False
+
+    with tempfile.TemporaryDirectory(prefix="epub2mp3_m4b_") as temp_dir:
+        temp_dir = Path(temp_dir)
+
+        # Write all audio to a single WAV file and track chapter positions
+        all_audio = []
+        chapters = []  # (start_ms, end_ms, title)
+        current_pos_ms = 0
+
+        for chapter_title, audio_data in audio_segments:
+            if len(audio_data) == 0:
+                continue
+
+            start_ms = current_pos_ms
+            duration_ms = int(len(audio_data) / sample_rate * 1000)
+            end_ms = start_ms + duration_ms
+
+            chapters.append((start_ms, end_ms, chapter_title))
+            all_audio.append(audio_data)
+
+            # Add 500ms silence between chapters
+            silence = np.zeros(int(sample_rate * 0.5), dtype=audio_data.dtype)
+            all_audio.append(silence)
+            current_pos_ms = end_ms + 500
+
+        if not all_audio:
+            return False
+
+        # Concatenate all audio
+        combined = np.concatenate(all_audio)
+
+        # Normalize to int16
+        if combined.dtype != np.int16:
+            combined = (combined * 32767).astype(np.int16)
+
+        # Write temporary WAV file
+        wav_path = temp_dir / "audio.wav"
+        import wave
+        with wave.open(str(wav_path), 'wb') as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(combined.tobytes())
+
+        # Create ffmpeg metadata file for chapters
+        metadata_path = temp_dir / "metadata.txt"
+        with open(metadata_path, 'w') as f:
+            f.write(";FFMETADATA1\n")
+            f.write(f"title={title}\n")
+            f.write(f"artist={author}\n")
+            f.write(f"album={title}\n")
+            f.write("genre=Audiobook\n")
+            f.write("\n")
+
+            for start_ms, end_ms, chapter_title in chapters:
+                f.write("[CHAPTER]\n")
+                f.write("TIMEBASE=1/1000\n")
+                f.write(f"START={start_ms}\n")
+                f.write(f"END={end_ms}\n")
+                f.write(f"title={chapter_title}\n")
+                f.write("\n")
+
+        # Build ffmpeg command
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', str(wav_path),
+            '-i', str(metadata_path),
+            '-map_metadata', '1',
+        ]
+
+        # Add cover image if available
+        cover_path = None
+        if cover_image and cover_mime:
+            ext = 'jpg' if 'jpeg' in cover_mime else 'png'
+            cover_path = temp_dir / f"cover.{ext}"
+            with open(cover_path, 'wb') as f:
+                f.write(cover_image)
+            cmd.extend(['-i', str(cover_path)])
+            cmd.extend(['-map', '0:a', '-map', '2:v'])
+            cmd.extend(['-disposition:v:0', 'attached_pic'])
+        else:
+            cmd.extend(['-map', '0:a'])
+
+        # Output settings for M4B (AAC in MP4 container)
+        cmd.extend([
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-ar', str(sample_rate),
+            '-ac', '1',
+            str(output_path)
+        ])
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600  # 10 minute timeout
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError):
+            return False
+
+
 def get_voice_state(model: TTSModel, voice: str):
     """Get voice state for a given voice name or WAV path.
 
@@ -455,26 +593,41 @@ def convert_epub_to_mp3(
     chapter_indices: list[int] = None,
     skip_existing: bool = False,
     announce_chapters: bool = False,
+    output_format: str = "mp3",
 ) -> list[str]:
     """
-    Convert an EPUB file to MP3(s).
+    Convert an EPUB file to audio files (MP3 or M4B).
 
     Args:
         epub_path: Path to the EPUB file
-        output_dir: Directory to save MP3 files
+        output_dir: Directory to save audio files
         model: Loaded TTSModel instance
         voice: Voice name or custom WAV path
-        per_chapter: If True, create one MP3 per chapter; otherwise combine all
+        per_chapter: If True, create one file per chapter; otherwise combine all
         progress_callback: Function(current, total, message) for progress updates
         chapter_indices: List of chapter indices to convert (None = all)
         skip_existing: If True, skip chapters that already have output files
         announce_chapters: If True, speak chapter title at start of each chapter
+        output_format: "mp3" or "m4b" (M4B requires ffmpeg, creates single file with chapters)
 
     Returns:
-        List of paths to generated MP3 files
+        List of paths to generated audio files
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Validate output format
+    output_format = output_format.lower()
+    if output_format not in ("mp3", "m4b"):
+        raise ValueError(f"Unsupported output format: {output_format}")
+
+    # M4B requires ffmpeg
+    if output_format == "m4b" and not is_ffmpeg_available():
+        raise ValueError("M4B format requires ffmpeg to be installed")
+
+    # M4B is always a single file with chapters (per_chapter is ignored)
+    if output_format == "m4b":
+        per_chapter = False
 
     # Parse EPUB
     if progress_callback:
@@ -566,11 +719,13 @@ def convert_epub_to_mp3(
                 )
                 output_files.append(str(output_path))
     else:
-        # Single combined MP3
+        # Single combined file (MP3 or M4B)
         if progress_callback:
-            progress_callback(10, 100, "Combining chapters...")
+            format_name = "M4B audiobook" if output_format == "m4b" else "combined MP3"
+            progress_callback(10, 100, f"Creating {format_name}...")
 
-        all_audio = []
+        # For M4B, we need to track chapter segments separately
+        chapter_segments = []  # (chapter_title, audio_data)
 
         for idx, chapter in enumerate(selected_chapters):
             title = chapter.title
@@ -579,41 +734,79 @@ def convert_epub_to_mp3(
             if progress_callback:
                 progress_callback(progress_pct, 100, f"Converting: {title[:30]}...")
 
+            chapter_audio_parts = []
+
             # Generate chapter announcement if enabled
             if announce_chapters:
                 announcement_text = f"Chapter {idx + 1}. {title}."
                 announcement = text_to_audio(model, voice_state, announcement_text)
                 if len(announcement) > 0:
-                    all_audio.append(announcement)
+                    chapter_audio_parts.append(announcement)
                     # Add a brief pause after announcement
                     pause = np.zeros(int(sample_rate * 0.8), dtype=announcement.dtype)
-                    all_audio.append(pause)
+                    chapter_audio_parts.append(pause)
 
-            audio = text_to_audio(model, voice_state, text)
-            if len(audio) > 0:
-                all_audio.append(audio)
-                # Add a short pause between chapters (0.5 seconds of silence)
-                silence = np.zeros(int(sample_rate * 0.5), dtype=audio.dtype)
-                all_audio.append(silence)
+            content_audio = text_to_audio(model, voice_state, text)
+            if len(content_audio) > 0:
+                chapter_audio_parts.append(content_audio)
 
-        if all_audio:
-            combined_audio = np.concatenate(all_audio)
-            output_path = output_dir / f"{book.title}.mp3"
+            if chapter_audio_parts:
+                chapter_audio = np.concatenate(chapter_audio_parts)
+                chapter_segments.append((title, chapter_audio))
 
-            if progress_callback:
-                progress_callback(95, 100, "Saving MP3...")
+        if chapter_segments:
+            # Sanitize filename
+            safe_title = re.sub(r'[^\w\s-]', '', book.title)[:100].strip()
+            if not safe_title:
+                safe_title = "audiobook"
 
-            convert_wav_to_mp3(combined_audio, sample_rate, str(output_path))
-            add_id3_tags(
-                str(output_path),
-                title=book.title,
-                album=book.title,
-                artist=book.author,
-                voice=voice,
-                cover_image=book.cover_image,
-                cover_mime=book.cover_mime,
-            )
-            output_files.append(str(output_path))
+            if output_format == "m4b":
+                # Create M4B with embedded chapter markers
+                output_path = output_dir / f"{safe_title}.m4b"
+
+                if progress_callback:
+                    progress_callback(95, 100, "Creating M4B with chapters...")
+
+                success = create_m4b_with_chapters(
+                    audio_segments=chapter_segments,
+                    output_path=str(output_path),
+                    sample_rate=sample_rate,
+                    title=book.title,
+                    author=book.author,
+                    cover_image=book.cover_image,
+                    cover_mime=book.cover_mime,
+                )
+
+                if not success:
+                    raise ValueError("Failed to create M4B file (ffmpeg error)")
+
+                output_files.append(str(output_path))
+            else:
+                # Combined MP3
+                all_audio = []
+                for _, audio in chapter_segments:
+                    all_audio.append(audio)
+                    # Add a short pause between chapters
+                    silence = np.zeros(int(sample_rate * 0.5), dtype=audio.dtype)
+                    all_audio.append(silence)
+
+                combined_audio = np.concatenate(all_audio)
+                output_path = output_dir / f"{safe_title}.mp3"
+
+                if progress_callback:
+                    progress_callback(95, 100, "Saving MP3...")
+
+                convert_wav_to_mp3(combined_audio, sample_rate, str(output_path))
+                add_id3_tags(
+                    str(output_path),
+                    title=book.title,
+                    album=book.title,
+                    artist=book.author,
+                    voice=voice,
+                    cover_image=book.cover_image,
+                    cover_mime=book.cover_mime,
+                )
+                output_files.append(str(output_path))
 
     if progress_callback:
         if per_chapter and skip_existing and skipped_count > 0:

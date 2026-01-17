@@ -8,11 +8,11 @@ import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
-from converter import convert_epub_to_mp3, BUILTIN_VOICES
+from converter import convert_epub_to_mp3, BUILTIN_VOICES, is_ffmpeg_available
 
 app = typer.Typer(
-    name="epub2mp3",
-    help="Convert EPUB ebooks to MP3 audiobooks using Pocket TTS",
+    name="inkvoice",
+    help="Inkvoice - Turn your ebooks into audiobooks",
     add_completion=False,
 )
 console = Console()
@@ -52,20 +52,44 @@ def convert(
         "--announce", "-a",
         help="Speak chapter title at the start of each chapter",
     ),
+    format: str = typer.Option(
+        "mp3",
+        "--format", "-f",
+        help="Output format: mp3 (per-chapter or combined) or m4b (single file with chapters, requires ffmpeg)",
+    ),
 ):
     """Convert an EPUB file to MP3 audiobook(s)."""
     from pocket_tts import TTSModel
+
+    # Validate format
+    format_lower = format.lower()
+    if format_lower not in ("mp3", "m4b"):
+        console.print(f"[red]Error:[/red] Unsupported format '{format}'. Use 'mp3' or 'm4b'.")
+        raise typer.Exit(1)
+
+    if format_lower == "m4b" and not is_ffmpeg_available():
+        console.print("[red]Error:[/red] M4B format requires ffmpeg to be installed.")
+        console.print("[dim]Install ffmpeg: brew install ffmpeg (macOS) or apt install ffmpeg (Linux)[/dim]")
+        raise typer.Exit(1)
 
     # Set output directory
     if output is None:
         output = epub_file.parent / epub_file.stem
     output.mkdir(parents=True, exist_ok=True)
 
-    console.print(f"[bold]epub2mp3[/bold] - Converting: {epub_file.name}")
+    # Determine mode description
+    if format_lower == "m4b":
+        mode_desc = "M4B audiobook with chapters"
+    elif single_file:
+        mode_desc = "single MP3 file"
+    else:
+        mode_desc = "per chapter MP3s"
+
+    console.print(f"[bold]Inkvoice[/bold] - Converting: {epub_file.name}")
     console.print(f"  Voice: {voice}")
     console.print(f"  Output: {output}")
-    console.print(f"  Mode: {'single file' if single_file else 'per chapter'}")
-    if resume:
+    console.print(f"  Format: {mode_desc}")
+    if resume and format_lower == "mp3" and not single_file:
         console.print(f"  Resume: enabled (skipping existing files)")
     if announce:
         console.print(f"  Announce: enabled (chapter titles)")
@@ -99,6 +123,7 @@ def convert(
                 progress_callback=progress_callback,
                 skip_existing=resume,
                 announce_chapters=announce,
+                output_format=format_lower,
             )
         except Exception as e:
             console.print(f"[red]Error:[/red] {e}")
@@ -126,9 +151,9 @@ def serve(
     host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind to"),
     port: int = typer.Option(8000, "--port", "-p", help="Port to bind to"),
 ):
-    """Start the web interface."""
+    """Start the Inkvoice web interface."""
     import uvicorn
-    console.print(f"[bold]Starting web server at http://{host}:{port}[/bold]")
+    console.print(f"[bold]Inkvoice[/bold] web interface at http://{host}:{port}")
     uvicorn.run("app:app", host=host, port=port)
 
 

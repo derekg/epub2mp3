@@ -6,3 +6,5 @@ uvicorn
 python-multipart
 lameenc
 mutagen
+typer
+rich
