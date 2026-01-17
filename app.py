@@ -78,17 +78,18 @@ async def upload_epub(epub_file: UploadFile = File(...)):
         "book": book,
     }
 
-    # Return chapter list with word counts
+    # Return chapter list with word counts and front/back matter flags
     chapters = []
     total_words = 0
-    for i, (title, text) in enumerate(book.chapters):
-        word_count = len(text.split())
-        total_words += word_count
+    for i, ch in enumerate(book.chapters):
+        total_words += ch.word_count
         chapters.append({
             "index": i,
-            "title": title,
-            "length": len(text),
-            "words": word_count,
+            "title": ch.title,
+            "length": len(ch.text),
+            "words": ch.word_count,
+            "is_front_matter": ch.is_front_matter,
+            "is_back_matter": ch.is_back_matter,
         })
 
     return {

@@ -21,13 +21,54 @@ BUILTIN_VOICES = [
 
 
 @dataclass
+class Chapter:
+    """A chapter extracted from an EPUB."""
+    title: str
+    text: str
+    word_count: int
+    is_front_matter: bool = False
+    is_back_matter: bool = False
+    source_file: str = ""
+
+
+@dataclass
 class BookMetadata:
     """Metadata extracted from an EPUB file."""
     title: str
     author: str
-    chapters: list[tuple[str, str]]  # (chapter_title, chapter_text)
-    cover_image: bytes | None = None  # Cover image data (JPEG/PNG)
-    cover_mime: str | None = None  # MIME type of cover image
+    chapters: list[Chapter]
+    cover_image: bytes | None = None
+    cover_mime: str | None = None
+
+
+# Keywords for detecting front/back matter
+# Note: Prologue, Introduction, Preface are kept as content (user likely wants these)
+FRONT_MATTER_KEYWORDS = [
+    'cover', 'title page', 'titlepage', 'copyright', 'dedication',
+    'epigraph', 'contents', 'table of contents', 'toc',
+    'also by', 'praise for', 'about the publisher', 'half title',
+    'frontmatter', 'front matter', 'note to reader'
+]
+
+BACK_MATTER_KEYWORDS = [
+    'afterword', 'acknowledgment', 'acknowledgement',
+    'endnotes', 'bibliography', 'references', 'index',
+    'about the author', 'about author', 'newsletter', 'also by',
+    'other books', 'reading group', 'discussion questions',
+    'backmatter', 'back matter', 'credits', 'further reading'
+]
+
+
+def is_front_matter(title: str) -> bool:
+    """Check if a chapter title indicates front matter."""
+    title_lower = title.lower()
+    return any(kw in title_lower for kw in FRONT_MATTER_KEYWORDS)
+
+
+def is_back_matter(title: str) -> bool:
+    """Check if a chapter title indicates back matter."""
+    title_lower = title.lower()
+    return any(kw in title_lower for kw in BACK_MATTER_KEYWORDS)
 
 
 def parse_epub(epub_path: str) -> BookMetadata:
@@ -83,10 +124,86 @@ def parse_epub(epub_path: str) -> BookMetadata:
                         cover_mime = item.media_type
                         break
 
-    # Extract chapters
+    # Build a map of file names to document items
+    doc_items = {}
+    for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+        doc_items[item.get_name()] = item
+        # Also map without directory prefix
+        short_name = item.get_name().split('/')[-1]
+        if short_name not in doc_items:
+            doc_items[short_name] = item
+
+    # Try to extract chapters from TOC first (better titles)
     chapters = []
-    for item in book.get_items():
-        if item.get_type() == ebooklib.ITEM_DOCUMENT:
+    toc = book.toc
+
+    def flatten_toc(items, depth=0):
+        """Flatten nested TOC into list of (title, href, depth)."""
+        result = []
+        for item in items:
+            if isinstance(item, tuple):
+                # Nested section: (section_link, children)
+                section, children = item
+                if hasattr(section, 'title') and hasattr(section, 'href'):
+                    result.append((section.title, section.href, depth))
+                result.extend(flatten_toc(children, depth + 1))
+            elif hasattr(item, 'title') and hasattr(item, 'href'):
+                result.append((item.title, item.href, depth))
+        return result
+
+    if toc:
+        toc_entries = flatten_toc(toc)
+
+        # Track which files we've seen to merge split content
+        seen_files = set()
+        pending_merge = None  # (title, texts, file)
+
+        for toc_title, href, depth in toc_entries:
+            # Extract file path (before #anchor)
+            file_path = href.split('#')[0] if href else None
+
+            if not file_path or file_path not in doc_items:
+                # Try with just filename
+                short_path = file_path.split('/')[-1] if file_path else None
+                if short_path and short_path in doc_items:
+                    file_path = short_path
+                else:
+                    continue
+
+            item = doc_items[file_path]
+            content = item.get_content().decode('utf-8', errors='ignore')
+            soup = BeautifulSoup(content, 'html.parser')
+            text = clean_text(soup.get_text(separator=' '))
+            word_count = len(text.split())
+
+            # Skip empty or very short sections
+            if word_count < 10:
+                continue
+
+            # Detect front/back matter
+            front = is_front_matter(toc_title)
+            back = is_back_matter(toc_title)
+
+            # Check if this is a continuation (same file, different anchor)
+            if file_path in seen_files:
+                # Skip duplicate entries for same file (already captured full content)
+                continue
+
+            seen_files.add(file_path)
+
+            chapters.append(Chapter(
+                title=toc_title,
+                text=text,
+                word_count=word_count,
+                is_front_matter=front,
+                is_back_matter=back,
+                source_file=file_path,
+            ))
+
+    # Fallback: if TOC parsing yielded nothing useful, use document iteration
+    if len([c for c in chapters if not c.is_front_matter and not c.is_back_matter]) < 2:
+        chapters = []
+        for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
             content = item.get_content().decode('utf-8', errors='ignore')
             soup = BeautifulSoup(content, 'html.parser')
 
@@ -99,14 +216,23 @@ def parse_epub(epub_path: str) -> BookMetadata:
                     break
 
             if not title:
-                title = item.get_name()
+                title = item.get_name().split('/')[-1]
 
-            # Extract and clean text
-            text = soup.get_text(separator=' ')
-            text = clean_text(text)
+            text = clean_text(soup.get_text(separator=' '))
+            word_count = len(text.split())
 
-            if text and len(text) > 50:  # Skip very short sections
-                chapters.append((title, text))
+            if word_count >= 50:  # Skip very short sections
+                chapters.append(Chapter(
+                    title=title,
+                    text=text,
+                    word_count=word_count,
+                    is_front_matter=is_front_matter(title),
+                    is_back_matter=is_back_matter(title),
+                    source_file=item.get_name(),
+                ))
+
+    # Intelligent merging: combine small adjacent sections (Calibre split files)
+    chapters = merge_small_chapters(chapters)
 
     return BookMetadata(
         title=book_title,
@@ -115,6 +241,53 @@ def parse_epub(epub_path: str) -> BookMetadata:
         cover_image=cover_image,
         cover_mime=cover_mime,
     )
+
+
+def merge_small_chapters(chapters: list[Chapter], min_words: int = 500) -> list[Chapter]:
+    """
+    Merge small adjacent chapters that appear to be over-split.
+
+    Detects Calibre-style splitting (index_split_XXX) and merges
+    until hitting a real chapter boundary (>min_words or clear title).
+    """
+    if not chapters:
+        return chapters
+
+    merged = []
+    pending = None  # Chapter being accumulated
+
+    for chapter in chapters:
+        # Detect if this looks like a Calibre split file
+        is_split_file = 'split' in chapter.source_file.lower()
+
+        # Check if this looks like a real chapter start
+        has_chapter_title = bool(re.match(
+            r'^(chapter|part|book|section|act|scene|\d+[.:]|\d+\s*[-–—]|[ivxlc]+[.:])',
+            chapter.title.lower().strip()
+        ))
+
+        if pending is None:
+            # Start accumulating
+            pending = chapter
+        elif is_split_file and not has_chapter_title and pending.word_count < min_words:
+            # Merge with pending - this looks like a continuation
+            pending = Chapter(
+                title=pending.title,
+                text=pending.text + " " + chapter.text,
+                word_count=pending.word_count + chapter.word_count,
+                is_front_matter=pending.is_front_matter,
+                is_back_matter=pending.is_back_matter or chapter.is_back_matter,
+                source_file=pending.source_file,
+            )
+        else:
+            # This looks like a new chapter, save pending and start fresh
+            merged.append(pending)
+            pending = chapter
+
+    if pending:
+        merged.append(pending)
+
+    return merged
 
 
 def clean_text(text: str) -> str:
@@ -315,11 +488,11 @@ def convert_epub_to_mp3(
     # Filter chapters if indices provided
     if chapter_indices is not None:
         selected_chapters = [
-            (i, book.chapters[i]) for i in chapter_indices
+            book.chapters[i] for i in chapter_indices
             if 0 <= i < len(book.chapters)
         ]
     else:
-        selected_chapters = list(enumerate(book.chapters))
+        selected_chapters = list(book.chapters)
 
     if not selected_chapters:
         raise ValueError("No chapters selected for conversion")
@@ -337,7 +510,9 @@ def convert_epub_to_mp3(
 
     if per_chapter:
         # One MP3 per chapter
-        for idx, (orig_idx, (title, text)) in enumerate(selected_chapters):
+        for idx, chapter in enumerate(selected_chapters):
+            title = chapter.title
+            text = chapter.text
             progress_pct = 10 + int((idx / total_chapters) * 85)
             safe_title = re.sub(r'[^\w\s-]', '', title)[:50]
             filename = f"{idx+1:03d}_{safe_title}.mp3"
@@ -397,7 +572,9 @@ def convert_epub_to_mp3(
 
         all_audio = []
 
-        for idx, (orig_idx, (title, text)) in enumerate(selected_chapters):
+        for idx, chapter in enumerate(selected_chapters):
+            title = chapter.title
+            text = chapter.text
             progress_pct = 10 + int((idx / total_chapters) * 80)
             if progress_callback:
                 progress_callback(progress_pct, 100, f"Converting: {title[:30]}...")
