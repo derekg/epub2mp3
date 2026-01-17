@@ -37,14 +37,15 @@ Create condensed versions:
 
 ## Model Options
 
-| Model | Size | Speed | Quality | Notes |
-|-------|------|-------|---------|-------|
-| **Gemma 2B** | 1.5GB | Fast | Good | Google, Apache 2.0 |
-| **Phi-3-mini** | 2.3GB | Fast | Good | Microsoft, MIT |
-| **Qwen2-1.5B** | 1.1GB | Fastest | OK | Alibaba, good for cleaning |
-| **Llama-3.2-1B** | 1.3GB | Fast | OK | Meta, newest small model |
+| Model | Size | Context | Speed | Quality | Notes |
+|-------|------|---------|-------|---------|-------|
+| **Gemma 3 1B** | 815MB | 32K | Fastest | Good | Google, latest generation |
+| **Gemma 3 4B** | 3GB | 128K | Fast | Great | Multimodal, best quality |
+| **Gemma 2 2B** | 1.5GB | 8K | Fast | Good | Previous generation |
+| **Phi-3-mini** | 2.3GB | 4K | Fast | Good | Microsoft, MIT |
+| **Llama-3.2-1B** | 1.3GB | 8K | Fast | OK | Meta |
 
-**Recommendation**: Start with **Gemma 2B** via Ollama - good balance of quality and speed.
+**Recommendation**: Start with **Gemma 3 1B** via Ollama - smallest, fastest, and has 32K context (4x more than Gemma 2).
 
 ## Implementation Options
 
@@ -59,7 +60,7 @@ import ollama
 
 def clean_text_with_llm(text: str) -> str:
     response = ollama.generate(
-        model='gemma2:2b',
+        model='gemma3:1b',
         prompt=f"""Clean this text for text-to-speech. Remove:
 - Footnote markers like [1], [2]
 - Page numbers
@@ -147,22 +148,22 @@ Chapter: {title}
 
 ## Chunking Strategy
 
-LLMs have context limits. For a 2B model with 8K context:
-- ~6000 tokens for input
-- ~2000 tokens for output
-- Roughly 4000 words input per chunk
+Gemma 3 1B has 32K context (~24K words), so most chapters fit in a single chunk:
+- ~24000 tokens for input
+- ~8000 tokens for output
+- Roughly 18000 words input per chunk
 
 Strategy:
-1. Split chapter into ~3000 word chunks with overlap
+1. Split chapter into chunks with overlap (only if very long)
 2. Process each chunk
 3. Merge results, deduplicating overlap
 
 ## Performance Estimates
 
 On Apple M-series:
-- Gemma 2B: ~30-50 tokens/sec
-- Cleaning 5000 words: ~10-15 seconds
-- Full 80,000 word book: ~3-5 minutes of LLM processing
+- Gemma 3 1B: ~50-80 tokens/sec (faster than Gemma 2)
+- Cleaning 5000 words: ~5-10 seconds
+- Full 80,000 word book: ~2-4 minutes of LLM processing
 
 This adds modest time to the overall conversion (which is dominated by TTS anyway).
 

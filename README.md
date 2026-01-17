@@ -41,7 +41,7 @@ brew install ffmpeg  # macOS
 # Optional: Install Ollama for LLM text processing
 brew install ollama  # macOS
 ollama serve
-ollama pull gemma2:2b
+ollama pull gemma3:1b
 ```
 
 ## Usage

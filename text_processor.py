@@ -11,8 +11,8 @@ except ImportError:
     OLLAMA_AVAILABLE = False
 
 
-# Default model - Gemma 2B is a good balance of speed and quality
-DEFAULT_MODEL = "gemma2:2b"
+# Default model - Gemma 3 1B is small, fast, and has 32K context
+DEFAULT_MODEL = "gemma3:1b"
 
 # Chunk size for processing (in characters, ~750 words)
 CHUNK_SIZE = 4000
@@ -307,7 +307,7 @@ if __name__ == "__main__":
     # Quick test
     print(f"Ollama available: {is_ollama_available()}")
     print(f"Available models: {get_available_models()}")
-    print(f"Gemma2:2b available: {is_model_available('gemma2:2b')}")
+    print(f"Gemma3:1b available: {is_model_available('gemma3:1b')}")
 
     # Test basic cleaning
     test_text = """
