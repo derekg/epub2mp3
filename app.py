@@ -78,17 +78,26 @@ async def upload_epub(epub_file: UploadFile = File(...)):
         "book": book,
     }
 
-    # Return chapter list
-    chapters = [
-        {"index": i, "title": title, "length": len(text)}
-        for i, (title, text) in enumerate(book.chapters)
-    ]
+    # Return chapter list with word counts
+    chapters = []
+    total_words = 0
+    for i, (title, text) in enumerate(book.chapters):
+        word_count = len(text.split())
+        total_words += word_count
+        chapters.append({
+            "index": i,
+            "title": title,
+            "length": len(text),
+            "words": word_count,
+        })
 
     return {
         "upload_id": upload_id,
         "title": book.title,
         "author": book.author,
         "chapters": chapters,
+        "total_words": total_words,
+        "has_cover": book.cover_image is not None,
     }
 
 

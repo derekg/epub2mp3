@@ -9,7 +9,7 @@ import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
 from pocket_tts import TTSModel
-from mutagen.id3 import ID3, TIT2, TALB, TPE1, TRCK, TCON, COMM
+from mutagen.id3 import ID3, TIT2, TALB, TPE1, TRCK, TCON, COMM, APIC
 import lameenc
 import numpy as np
 
@@ -26,6 +26,8 @@ class BookMetadata:
     title: str
     author: str
     chapters: list[tuple[str, str]]  # (chapter_title, chapter_text)
+    cover_image: bytes | None = None  # Cover image data (JPEG/PNG)
+    cover_mime: str | None = None  # MIME type of cover image
 
 
 def parse_epub(epub_path: str) -> BookMetadata:
@@ -49,6 +51,37 @@ def parse_epub(epub_path: str) -> BookMetadata:
     author_meta = book.get_metadata('DC', 'creator')
     if author_meta:
         book_author = author_meta[0][0]
+
+    # Try to extract cover image
+    cover_image = None
+    cover_mime = None
+
+    # Method 1: Check for cover image item
+    for item in book.get_items_of_type(ebooklib.ITEM_COVER):
+        cover_image = item.get_content()
+        cover_mime = item.media_type
+        break
+
+    # Method 2: Look for image items with 'cover' in name
+    if not cover_image:
+        for item in book.get_items_of_type(ebooklib.ITEM_IMAGE):
+            name = item.get_name().lower()
+            if 'cover' in name:
+                cover_image = item.get_content()
+                cover_mime = item.media_type
+                break
+
+    # Method 3: Check metadata for cover reference
+    if not cover_image:
+        cover_meta = book.get_metadata('OPF', 'cover')
+        if cover_meta:
+            cover_id = cover_meta[0][1].get('content') if len(cover_meta[0]) > 1 else None
+            if cover_id:
+                for item in book.get_items():
+                    if item.get_id() == cover_id:
+                        cover_image = item.get_content()
+                        cover_mime = item.media_type
+                        break
 
     # Extract chapters
     chapters = []
@@ -75,7 +108,13 @@ def parse_epub(epub_path: str) -> BookMetadata:
             if text and len(text) > 50:  # Skip very short sections
                 chapters.append((title, text))
 
-    return BookMetadata(title=book_title, author=book_author, chapters=chapters)
+    return BookMetadata(
+        title=book_title,
+        author=book_author,
+        chapters=chapters,
+        cover_image=cover_image,
+        cover_mime=cover_mime,
+    )
 
 
 def clean_text(text: str) -> str:
@@ -193,6 +232,8 @@ def add_id3_tags(
     track_num: int = None,
     total_tracks: int = None,
     voice: str = None,
+    cover_image: bytes = None,
+    cover_mime: str = None,
 ):
     """Add ID3 tags to an MP3 file."""
     # Create ID3 tag (or load existing)
@@ -217,6 +258,16 @@ def add_id3_tags(
     # Add comment with voice info
     if voice:
         tags["COMM"] = COMM(encoding=3, lang="eng", desc="Voice", text=f"Generated with Pocket TTS ({voice})")
+
+    # Add cover art
+    if cover_image and cover_mime:
+        tags["APIC"] = APIC(
+            encoding=3,
+            mime=cover_mime,
+            type=3,  # Cover (front)
+            desc="Cover",
+            data=cover_image,
+        )
 
     tags.save(mp3_path)
 
@@ -335,6 +386,8 @@ def convert_epub_to_mp3(
                     track_num=idx + 1,
                     total_tracks=total_chapters,
                     voice=voice,
+                    cover_image=book.cover_image,
+                    cover_mime=book.cover_mime,
                 )
                 output_files.append(str(output_path))
     else:
@@ -380,6 +433,8 @@ def convert_epub_to_mp3(
                 album=book.title,
                 artist=book.author,
                 voice=voice,
+                cover_image=book.cover_image,
+                cover_mime=book.cover_mime,
             )
             output_files.append(str(output_path))
 

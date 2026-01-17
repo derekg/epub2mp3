@@ -73,7 +73,8 @@
             margin-bottom: 16px;
         }
         .book-info h2 { font-size: 1.1rem; margin-bottom: 4px; }
-        .book-info .author { color: var(--text-dim); font-size: 0.9rem; }
+        .book-info .author { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 4px; }
+        .book-info .book-stats { color: var(--text-dim); font-size: 0.85rem; }
 
         /* Chapter list */
         .chapter-section { display: none; }
@@ -283,12 +284,13 @@
             <div class="book-info" id="bookInfo">
                 <h2 id="bookTitle"></h2>
                 <p class="author" id="bookAuthor"></p>
+                <p class="book-stats" id="bookStats"></p>
             </div>
 
             <!-- Step 2: Chapter selection -->
             <div class="chapter-section" id="chapterSection">
                 <div class="chapter-header">
-                    <h3>Select chapters</h3>
+                    <h3>Select chapters <span id="selectionStats" style="font-weight: normal;"></span></h3>
                     <div class="select-actions">
                         <button onclick="selectAll()">All</button>
                         <button onclick="selectNone()">None</button>
@@ -357,6 +359,7 @@
         const bookInfo = document.getElementById('bookInfo');
         const bookTitle = document.getElementById('bookTitle');
         const bookAuthor = document.getElementById('bookAuthor');
+        const bookStats = document.getElementById('bookStats');
         const chapterSection = document.getElementById('chapterSection');
         const chapterList = document.getElementById('chapterList');
         const optionsSection = document.getElementById('optionsSection');
@@ -419,6 +422,16 @@
                 // Show book info
                 bookTitle.textContent = data.title;
                 bookAuthor.textContent = `by ${data.author}`;
+
+                // Calculate and show stats
+                const totalWords = data.total_words;
+                const estMinutes = Math.round(totalWords / 150);  // ~150 words/min speaking rate
+                const hours = Math.floor(estMinutes / 60);
+                const mins = estMinutes % 60;
+                const durationStr = hours > 0 ? `~${hours}h ${mins}m` : `~${mins}m`;
+                const coverStr = data.has_cover ? '📖 ' : '';
+                bookStats.textContent = `${coverStr}${totalWords.toLocaleString()} words • ${durationStr} estimated`;
+
                 bookInfo.style.display = 'block';
 
                 // Show chapters
@@ -441,6 +454,18 @@
             }
         }
 
+        const selectionStats = document.getElementById('selectionStats');
+
+        function updateSelectionStats() {
+            const selected = getSelectedChapters();
+            const selectedWords = selected.reduce((sum, idx) => sum + chapters[idx].words, 0);
+            const estMinutes = Math.round(selectedWords / 150);
+            const hours = Math.floor(estMinutes / 60);
+            const mins = estMinutes % 60;
+            const durationStr = hours > 0 ? `~${hours}h ${mins}m` : `~${mins}m`;
+            selectionStats.textContent = `(${selected.length}/${chapters.length} • ${selectedWords.toLocaleString()} words • ${durationStr})`;
+        }
+
         function renderChapters() {
             chapterList.innerHTML = '';
             chapters.forEach((ch, i) => {
@@ -449,30 +474,34 @@
                 div.innerHTML = `
                     <input type="checkbox" checked data-index="${i}">
                     <span class="title">${ch.title}</span>
-                    <span class="length">${formatLength(ch.length)}</span>
+                    <span class="length">${formatLength(ch.words)} words</span>
                 `;
                 div.addEventListener('click', (e) => {
                     if (e.target.tagName !== 'INPUT') {
                         const cb = div.querySelector('input');
                         cb.checked = !cb.checked;
+                        updateSelectionStats();
                     }
                 });
+                div.querySelector('input').addEventListener('change', updateSelectionStats);
                 chapterList.appendChild(div);
             });
+            updateSelectionStats();
         }
 
-        function formatLength(chars) {
-            const words = Math.round(chars / 5);
-            if (words < 1000) return `${words} words`;
-            return `${(words / 1000).toFixed(1)}k words`;
+        function formatLength(words) {
+            if (words < 1000) return words.toLocaleString();
+            return `${(words / 1000).toFixed(1)}k`;
         }
 
         function selectAll() {
             chapterList.querySelectorAll('input').forEach(cb => cb.checked = true);
+            updateSelectionStats();
         }
 
         function selectNone() {
             chapterList.querySelectorAll('input').forEach(cb => cb.checked = false);
+            updateSelectionStats();
         }
 
         function getSelectedChapters() {
