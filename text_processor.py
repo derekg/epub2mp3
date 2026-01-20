@@ -1,261 +1,268 @@
-"""LLM-powered text processing for cleaner TTS output."""
+"""Text processing for cleaner TTS output using Gemini 3 Flash.
 
+Gemini 3 Flash has 1M+ token INPUT context and 65k token OUTPUT limit.
+This handles virtually any book chapter without chunking - only exceptionally
+long chapters (50k+ words) would need to be split.
+"""
+
+import os
 import re
+import time
 from typing import Callable
 
-# Try to import ollama, but make it optional
+# Try to import google-genai
 try:
-    import ollama
-    OLLAMA_AVAILABLE = True
+    from google import genai
+    from google.genai.errors import ClientError
+    GENAI_AVAILABLE = True
 except ImportError:
-    OLLAMA_AVAILABLE = False
+    GENAI_AVAILABLE = False
+    ClientError = Exception  # Fallback
+
+# Gemini 3 Flash - 1M+ token input context, 65k output tokens
+# Released Dec 2025: 3x faster than 2.5 Pro, better reasoning, $0.50/1M input
+MODEL = "gemini-3-flash-preview"
+
+# Rate limit handling
+MAX_RETRIES = 3
+RETRY_DELAY = 5  # seconds
+
+# Gemini 3 Flash output limit: 65,536 tokens (~50,000 words)
+# Most chapters fit in a single call - only very long ones need chunking
+MAX_OUTPUT_TOKENS = 65536
+CHUNK_SIZE_CHARS = 150000  # ~37,500 words, safe margin under output limit
+
+# Processing modes
+class ProcessingMode:
+    NONE = "none"           # No processing
+    CLEAN = "clean"         # Clean artifacts only
+    SPEED_READ = "speed"    # Summarize to ~30%
+    SUMMARY = "summary"     # Heavy summarization to ~10%
 
 
-# Default model - Gemma 3 4B has great quality and 128K context
-DEFAULT_MODEL = "gemma3:4b"
+def get_client():
+    """Get Gemini client. API key from GEMINI_API_KEY env var."""
+    if not GENAI_AVAILABLE:
+        return None
 
-# Alternative models users can choose from
-RECOMMENDED_MODELS = [
-    ("gemma3:4b", "Gemma 3 4B - Best quality, 128K context (default)"),
-    ("gemma3:1b", "Gemma 3 1B - Fastest, 32K context, lower memory"),
-    ("gemma3:12b", "Gemma 3 12B - Highest quality, needs more VRAM"),
-    ("llama3.2:3b", "Llama 3.2 3B - Alternative, 128K context"),
-]
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return None
 
-# Chunk size for processing - sized for Gemma 3's 128K context
-# ~8000 words per chunk, most chapters fit in one call
-CHUNK_SIZE = 50000
-CHUNK_OVERLAP = 500
+    return genai.Client(api_key=api_key)
 
 
-def is_ollama_available() -> bool:
-    """Check if Ollama is installed and running."""
-    if not OLLAMA_AVAILABLE:
-        return False
-    try:
-        ollama.list()
-        return True
-    except Exception:
-        return False
+def is_gemini_available() -> bool:
+    """Check if Gemini API is configured and available."""
+    return get_client() is not None
 
 
-def is_model_available(model: str = DEFAULT_MODEL) -> bool:
-    """Check if a specific model is available in Ollama."""
-    if not is_ollama_available():
-        return False
-    try:
-        models = ollama.list()
-        model_names = [m['name'] for m in models.get('models', [])]
-        # Check both exact match and base name match
-        return any(model in name or name.startswith(model.split(':')[0]) for name in model_names)
-    except Exception:
-        return False
+# Text cleaning prompt - optimized for TTS
+CLEAN_PROMPT = """Clean this text for text-to-speech. Remove:
+- Footnote markers [1], [2], *, †
+- Page numbers
+- Figure/table references like "See Figure 3.2"
+- URLs (keep link text if meaningful)
+- Repeated headers/footers
+- Excessive whitespace
 
+Keep ALL actual content. Do not summarize. Output only the cleaned text.
 
-def get_available_models() -> list[str]:
-    """Get list of available Ollama models."""
-    if not is_ollama_available():
-        return []
-    try:
-        models = ollama.list()
-        return [m['name'] for m in models.get('models', [])]
-    except Exception:
-        return []
-
-
-# Text cleaning prompt
-CLEAN_PROMPT = """You are preparing text for text-to-speech conversion. Clean the following text by:
-
-1. Remove footnote markers like [1], [2], *, †, superscript numbers
-2. Remove page numbers that appear randomly in text
-3. Remove repeated headers or footers
-4. Remove or simplify figure/table references like "See Figure 3.2"
-5. Remove URLs but keep meaningful link text
-6. Fix OCR artifacts and weird punctuation
-7. Remove excessive whitespace and normalize formatting
-
-IMPORTANT: Keep all actual content intact. Do not summarize or change the meaning.
-Only output the cleaned text, nothing else.
-
-Text to clean:
-{text}
-
-Cleaned text:"""
+Text:
+{text}"""
 
 
 # Summarization prompt
-SUMMARIZE_PROMPT = """Summarize this text for an audiobook listener.
-Keep it engaging and narrative - write it as prose that sounds good when read aloud.
-Target length: approximately {target_words} words ({target_percent}% of original).
-Focus on key points, main ideas, and important details.
+SUMMARIZE_PROMPT = """You are summarizing a book chapter for an audiobook. Your task is to CONDENSE the text significantly.
 
-Title: {title}
+IMPORTANT: You MUST output approximately {target_words} words (roughly {target_percent}% of the original length). Do NOT output the full text.
 
-Original text:
+Requirements:
+- Reduce the text to approximately {target_words} words
+- Keep it as engaging prose suitable for listening
+- Focus only on the most important points
+- Remove all redundant details and examples
+
+Chapter: {title}
+
+Original text ({original_words} words):
 {text}
 
-Summary:"""
+Condensed summary (approximately {target_words} words):"""
 
 
-def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
-    """Split text into overlapping chunks for processing."""
+def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE_CHARS) -> list[str]:
+    """Split text into chunks at paragraph boundaries."""
     if len(text) <= chunk_size:
         return [text]
 
     chunks = []
-    start = 0
+    paragraphs = text.split('\n\n')
+    current_chunk = []
+    current_size = 0
 
-    while start < len(text):
-        end = start + chunk_size
+    for para in paragraphs:
+        para_size = len(para) + 2  # +2 for \n\n
+        if current_size + para_size > chunk_size and current_chunk:
+            chunks.append('\n\n'.join(current_chunk))
+            current_chunk = [para]
+            current_size = para_size
+        else:
+            current_chunk.append(para)
+            current_size += para_size
 
-        # Try to break at sentence boundary
-        if end < len(text):
-            # Look for sentence end near chunk boundary
-            for sep in ['. ', '! ', '? ', '\n\n', '\n']:
-                last_sep = text.rfind(sep, start + chunk_size - 500, end)
-                if last_sep > start:
-                    end = last_sep + len(sep)
-                    break
-
-        chunks.append(text[start:end].strip())
-        start = end - overlap
+    if current_chunk:
+        chunks.append('\n\n'.join(current_chunk))
 
     return chunks
 
 
-def clean_text_with_llm(
+def _clean_chunk(client, text: str, progress_callback: Callable[[str], None] = None) -> str:
+    """Clean a single chunk of text."""
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=CLEAN_PROMPT.format(text=text),
+                config={
+                    "temperature": 0.1,
+                    "maxOutputTokens": MAX_OUTPUT_TOKENS,
+                }
+            )
+            return response.text.strip()
+        except ClientError as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                if attempt < MAX_RETRIES - 1:
+                    if progress_callback:
+                        progress_callback(f"Rate limited, retrying in {RETRY_DELAY}s...")
+                    time.sleep(RETRY_DELAY * (attempt + 1))
+                    continue
+            raise
+    raise Exception("Max retries exceeded")
+
+
+def clean_text_with_gemini(
     text: str,
-    model: str = DEFAULT_MODEL,
     progress_callback: Callable[[str], None] = None,
 ) -> str:
     """
-    Clean text using LLM to remove artifacts that don't verbalize well.
+    Clean text using Gemini to remove artifacts that don't verbalize well.
 
-    Args:
-        text: The text to clean
-        model: Ollama model to use
-        progress_callback: Optional callback for progress updates
-
-    Returns:
-        Cleaned text suitable for TTS
+    For long texts, chunks by paragraph boundaries to stay within output token limit.
+    Each chunk uses the full 8k output tokens available.
     """
-    if not is_ollama_available():
+    client = get_client()
+    if not client:
         if progress_callback:
-            progress_callback("Ollama not available, using basic cleaning")
+            progress_callback("Gemini not configured, using basic cleaning")
         return clean_text_basic(text)
 
-    chunks = chunk_text(text)
-    cleaned_chunks = []
+    chunks = _chunk_text(text)
 
-    for i, chunk in enumerate(chunks):
+    if len(chunks) == 1:
         if progress_callback:
-            progress_callback(f"Cleaning chunk {i+1}/{len(chunks)}...")
+            progress_callback("Cleaning text with Gemini...")
+    else:
+        if progress_callback:
+            progress_callback(f"Cleaning text with Gemini ({len(chunks)} chunks)...")
 
+    cleaned_chunks = []
+    for i, chunk in enumerate(chunks):
         try:
-            response = ollama.generate(
-                model=model,
-                prompt=CLEAN_PROMPT.format(text=chunk),
-                options={
-                    'temperature': 0.1,  # Low temperature for consistent cleaning
-                    'num_predict': len(chunk) + 500,  # Allow some expansion
-                }
-            )
-            cleaned_chunks.append(response['response'].strip())
+            if len(chunks) > 1 and progress_callback:
+                progress_callback(f"Cleaning chunk {i+1}/{len(chunks)}...")
+            cleaned = _clean_chunk(client, chunk, progress_callback)
+            cleaned_chunks.append(cleaned)
         except Exception as e:
-            # Fall back to basic cleaning on error
             if progress_callback:
-                progress_callback(f"LLM error, using basic cleaning: {e}")
+                progress_callback(f"Gemini error on chunk {i+1}, using basic cleaning: {e}")
             cleaned_chunks.append(clean_text_basic(chunk))
 
-    # Merge chunks (simple join - overlap was for context, not deduplication)
     return '\n\n'.join(cleaned_chunks)
 
 
-def summarize_text_with_llm(
+def summarize_text_with_gemini(
     text: str,
     title: str = "Chapter",
     target_percent: int = 30,
-    model: str = DEFAULT_MODEL,
     progress_callback: Callable[[str], None] = None,
 ) -> str:
     """
-    Summarize text using LLM for speed-read mode.
+    Summarize text using Gemini for speed-read mode.
 
-    Args:
-        text: The text to summarize
-        title: Chapter/section title for context
-        target_percent: Target length as percentage of original
-        model: Ollama model to use
-        progress_callback: Optional callback for progress updates
-
-    Returns:
-        Summarized text
+    With Gemini 2.5 Flash's 1M+ token input and 65k output, we can summarize
+    entire chapters (or even books) in a single call with full context.
     """
-    if not is_ollama_available():
+    client = get_client()
+    if not client:
         if progress_callback:
-            progress_callback("Ollama not available, cannot summarize")
+            progress_callback("Gemini not configured, cannot summarize")
         return text
 
     word_count = len(text.split())
     target_words = int(word_count * target_percent / 100)
 
-    # For very long texts, chunk and summarize each chunk
-    chunks = chunk_text(text)  # Uses CHUNK_SIZE (50K chars, ~8K words)
-    summaries = []
+    if progress_callback:
+        progress_callback(f"Summarizing to ~{target_words} words...")
 
-    for i, chunk in enumerate(chunks):
-        if progress_callback:
-            progress_callback(f"Summarizing chunk {i+1}/{len(chunks)}...")
+    # With 65k output tokens, we have plenty of room - just use max
+    # A 30% summary of a 100k word book = 30k words = ~40k tokens, still under limit
 
-        chunk_word_count = len(chunk.split())
-        chunk_target = int(chunk_word_count * target_percent / 100)
-
+    for attempt in range(MAX_RETRIES):
         try:
-            response = ollama.generate(
-                model=model,
-                prompt=SUMMARIZE_PROMPT.format(
-                    text=chunk,
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=SUMMARIZE_PROMPT.format(
+                    text=text,
                     title=title,
-                    target_words=chunk_target,
+                    target_words=target_words,
                     target_percent=target_percent,
+                    original_words=word_count,
                 ),
-                options={
-                    'temperature': 0.3,  # Slightly higher for more natural summaries
-                    'num_predict': chunk_target * 2,  # Allow flexibility
+                config={
+                    "temperature": 0.4,  # Allow some creativity for natural summaries
+                    "maxOutputTokens": MAX_OUTPUT_TOKENS,
                 }
             )
-            summaries.append(response['response'].strip())
+            return response.text.strip()
+        except ClientError as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                if attempt < MAX_RETRIES - 1:
+                    if progress_callback:
+                        progress_callback(f"Rate limited, retrying in {RETRY_DELAY}s...")
+                    time.sleep(RETRY_DELAY * (attempt + 1))
+                    continue
+            if progress_callback:
+                progress_callback(f"Summarization error: {e}")
+            return text
         except Exception as e:
             if progress_callback:
                 progress_callback(f"Summarization error: {e}")
-            summaries.append(chunk)  # Fall back to original
+            return text
 
-    return '\n\n'.join(summaries)
+    # If all retries failed
+    if progress_callback:
+        progress_callback("Rate limit exceeded, skipping summarization")
+    return text
 
 
 def clean_text_basic(text: str) -> str:
-    """
-    Basic regex-based text cleaning (fallback when LLM not available).
-    """
+    """Basic regex-based text cleaning (fallback when Gemini not available)."""
     # Remove footnote markers
     text = re.sub(r'\[\d+\]', '', text)
-    text = re.sub(r'\[[\w,\s]+\]', '', text)  # [citation needed] etc
+    text = re.sub(r'\[[\w,\s]+\]', '', text)
     text = re.sub(r'[*†‡§¶]+', '', text)
 
-    # Remove standalone numbers that look like page numbers
+    # Remove standalone page numbers
     text = re.sub(r'\n\s*\d{1,4}\s*\n', '\n', text)
 
     # Remove URLs
     text = re.sub(r'https?://\S+', '', text)
     text = re.sub(r'www\.\S+', '', text)
 
-    # Clean up figure/table references (simplify, don't remove context)
+    # Clean up figure/table references
     text = re.sub(r'\(see [Ff]igure \d+[.\d]*\)', '', text)
     text = re.sub(r'\(see [Tt]able \d+[.\d]*\)', '', text)
-
-    # Fix common OCR artifacts
-    text = re.sub(r'[|l](?=[A-Z])', 'I', text)  # l before capital likely meant I
-    text = re.sub(r'(?<=[a-z])0(?=[a-z])', 'o', text)  # 0 in word likely meant o
 
     # Normalize whitespace
     text = re.sub(r'\n{3,}', '\n\n', text)
@@ -265,19 +272,10 @@ def clean_text_basic(text: str) -> str:
     return text.strip()
 
 
-# Processing modes
-class ProcessingMode:
-    NONE = "none"           # No LLM processing
-    CLEAN = "clean"         # Clean artifacts only
-    SPEED_READ = "speed"    # Summarize to ~30%
-    SUMMARY = "summary"     # Heavy summarization to ~10%
-
-
 def process_chapter(
     text: str,
     title: str = "Chapter",
     mode: str = ProcessingMode.CLEAN,
-    model: str = DEFAULT_MODEL,
     progress_callback: Callable[[str], None] = None,
 ) -> str:
     """
@@ -287,7 +285,6 @@ def process_chapter(
         text: Chapter text
         title: Chapter title
         mode: Processing mode (none, clean, speed, summary)
-        model: Ollama model to use
         progress_callback: Optional callback for progress updates
 
     Returns:
@@ -297,36 +294,37 @@ def process_chapter(
         return text
 
     if mode == ProcessingMode.CLEAN:
-        return clean_text_with_llm(text, model, progress_callback)
+        return clean_text_with_gemini(text, progress_callback)
 
     if mode == ProcessingMode.SPEED_READ:
         # Clean first, then summarize to 30%
-        cleaned = clean_text_with_llm(text, model, progress_callback)
-        return summarize_text_with_llm(cleaned, title, 30, model, progress_callback)
+        cleaned = clean_text_with_gemini(text, progress_callback)
+        return summarize_text_with_gemini(cleaned, title, 30, progress_callback)
 
     if mode == ProcessingMode.SUMMARY:
         # Clean first, then heavy summarization to 10%
-        cleaned = clean_text_with_llm(text, model, progress_callback)
-        return summarize_text_with_llm(cleaned, title, 10, model, progress_callback)
+        cleaned = clean_text_with_gemini(text, progress_callback)
+        return summarize_text_with_gemini(cleaned, title, 10, progress_callback)
 
     return text
 
 
 if __name__ == "__main__":
-    # Quick test
-    print(f"Ollama available: {is_ollama_available()}")
-    print(f"Available models: {get_available_models()}")
-    print(f"Gemma3:1b available: {is_model_available('gemma3:1b')}")
+    print(f"Gemini available: {is_gemini_available()}")
 
-    # Test basic cleaning
-    test_text = """
-    This is a test paragraph[1] with some footnotes[2] and a URL https://example.com
-    that should be cleaned. See Figure 3.2 for more details.
+    if is_gemini_available():
+        test_text = """
+        This is a test paragraph[1] with some footnotes[2] and a URL https://example.com
+        that should be cleaned. See Figure 3.2 for more details.
 
-    42
+        42
 
-    Here's another paragraph with more content that should remain intact.
-    """
-
-    print("\n--- Basic cleaning test ---")
-    print(clean_text_basic(test_text))
+        Here's another paragraph with more content that should remain intact.
+        """
+        print("\n--- Gemini cleaning test ---")
+        print(clean_text_with_gemini(test_text))
+    else:
+        print("Set GEMINI_API_KEY environment variable to test")
+        print("\n--- Basic cleaning test ---")
+        test_text = "Test[1] with footnote"
+        print(clean_text_basic(test_text))

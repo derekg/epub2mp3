@@ -1,28 +1,33 @@
 # Inkvoice
 
-Turn your ebooks into audiobooks using [Kyutai's Pocket TTS](https://kyutai.org/blog/2026-01-13-pocket-tts) - a lightweight, high-quality text-to-speech model that runs locally on CPU.
+Convert any EPUB into a high-quality audiobook using AI-powered text-to-speech.
+
+Uses [Pocket TTS](https://kyutai.org/blog/2026-01-13-pocket-tts) for local speech synthesis and [Gemini](https://ai.google.dev/) for intelligent text processing.
 
 ## Features
 
-- **Web interface** - Modern dark theme with drag-and-drop
+- **Web interface** - Clean, modern UI with drag-and-drop
 - **CLI** - Batch convert from the command line
 - **8 built-in voices** - Alba, Marius, Javert, Jean, Fantine, Cosette, Eponine, Azelma
 - **Voice preview** - Listen to voices before converting
 - **Custom voice cloning** - Use any WAV file to clone a voice (CLI only)
 - **Chapter selection** - Choose which chapters to convert
 - **Smart EPUB parsing** - TOC-first parsing with intelligent chapter detection
-- **Front/back matter detection** - Auto-deselects title pages, copyright, acknowledgements, etc.
+- **Front/back matter detection** - Auto-deselects title pages, copyright, acknowledgements
+- **Cover art display** - Shows book cover in the web UI
 - **M4B audiobook format** - Single file with embedded chapter markers (requires ffmpeg)
 - **MP3 with metadata** - ID3 tags with title, author, chapter, and cover art
-- **Resume support** - Skip already-converted chapters
 - **Chapter announcements** - Optionally speak chapter titles
-- **LLM text processing** - Clean artifacts, create summaries (requires Ollama)
+- **AI text processing** - Powered by Gemini 3 Flash:
+  - **Narration-ready** - Remove footnotes, URLs, figure references
+  - **Condensed** - ~30% shorter while preserving key information
+  - **Key points** - ~10% summary of main ideas
 
 ## Requirements
 
 - Python 3.11+
 - ffmpeg (optional, for M4B format)
-- Ollama (optional, for LLM text processing)
+- Gemini API key (optional, for text processing)
 
 ## Installation
 
@@ -38,10 +43,8 @@ pip install -r requirements.txt
 brew install ffmpeg  # macOS
 # or: apt install ffmpeg  # Linux
 
-# Optional: Install Ollama for LLM text processing
-brew install ollama  # macOS
-ollama serve
-ollama pull gemma3:1b
+# Optional: Set up Gemini for text processing
+echo "GEMINI_API_KEY=your_api_key_here" > .env
 ```
 
 ## Usage
@@ -49,7 +52,7 @@ ollama pull gemma3:1b
 ### Web Interface
 
 ```bash
-python cli.py serve
+python app.py
 ```
 
 Open http://localhost:8000 in your browser:
@@ -57,8 +60,9 @@ Open http://localhost:8000 in your browser:
 1. Drop an EPUB file (or click to browse)
 2. Select chapters to include (front/back matter auto-deselected)
 3. Choose a voice and click the play button to preview
-4. Pick format: MP3 (per-chapter or combined) or M4B (single file with chapters)
-5. Click "Convert" and download when complete
+4. Pick format: MP3 (per-chapter) or M4B (single file with chapters)
+5. Select text processing mode (narration-ready is default when Gemini is configured)
+6. Click "Convert" and download when complete
 
 ### Command Line
 
@@ -81,20 +85,14 @@ python cli.py convert book.epub --announce
 # Resume an interrupted conversion (skip existing files)
 python cli.py convert book.epub --resume
 
-# Clean text with LLM (removes footnotes, artifacts)
+# Clean text with Gemini (removes footnotes, artifacts)
 python cli.py convert book.epub --clean
 
-# Create speed read version (~30% summary)
+# Create condensed version (~30%)
 python cli.py convert book.epub --speed-read
 
-# Create brief summary (~10%)
+# Create key points summary (~10%)
 python cli.py convert book.epub --summary
-
-# Use a different LLM model (faster)
-python cli.py convert book.epub --clean --model gemma3:1b
-
-# List available LLM models
-python cli.py models
 
 # Specify output directory
 python cli.py convert book.epub --output ./audiobooks
@@ -113,10 +111,9 @@ python cli.py voices
 | `--single-file` | `-s` | Combine chapters into one MP3 |
 | `--resume` | `-r` | Skip chapters with existing output files |
 | `--announce` | `-a` | Speak chapter title at start of each chapter |
-| `--clean` | `-c` | Clean text with LLM (remove artifacts) |
-| `--speed-read` | | Create ~30% condensed summary |
-| `--summary` | | Create ~10% brief summary |
-| `--model` | `-m` | LLM model (default: gemma3:4b) |
+| `--clean` | `-c` | Narration-ready text (remove artifacts) |
+| `--speed-read` | | Create ~30% condensed version |
+| `--summary` | | Create ~10% key points summary |
 
 ## Performance
 
@@ -130,8 +127,9 @@ The TTS model (~225MB) is downloaded automatically on first run and cached local
 inkvoice/
 ├── cli.py              # Command-line interface (typer)
 ├── app.py              # FastAPI web server
-├── converter.py        # EPUB parsing and TTS conversion
-├── text_processor.py   # LLM-powered text cleaning/summarization
+├── converter.py        # EPUB parsing and conversion orchestration
+├── tts.py              # Pocket TTS speech synthesis
+├── text_processor.py   # Gemini-powered text processing
 ├── templates/
 │   └── index.html      # Web UI
 └── requirements.txt    # Python dependencies

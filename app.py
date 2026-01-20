@@ -1,43 +1,41 @@
-"""FastAPI server for EPUB to MP3 conversion."""
+"""FastAPI server for EPUB to MP3 conversion using Gemini TTS."""
 
 import asyncio
 import json
 import shutil
 import tempfile
+import time
 import uuid
 import zipfile
-from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Load environment variables from .env file (in same directory as this script)
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
-from pocket_tts import TTSModel
 import lameenc
+import numpy as np
 
 from converter import convert_epub_to_mp3, parse_epub, BUILTIN_VOICES, is_ffmpeg_available
-from text_processor import ProcessingMode, is_ollama_available, DEFAULT_MODEL, RECOMMENDED_MODELS
+from text_processor import ProcessingMode, is_gemini_available
+from tts import (
+    get_voice_list, generate_preview, is_tts_available, load_model,
+    VOICES, DEFAULT_VOICE, SAMPLE_RATE
+)
 
 # Store for uploaded EPUBs awaiting conversion
 uploads: dict = {}
 
-# Global model instance (loaded once at startup)
-tts_model: TTSModel = None
-
 # Store for conversion jobs
 jobs: dict = {}
 
+# Load TTS model at startup
+if is_tts_available():
+    load_model()
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Load TTS model on startup."""
-    global tts_model
-    print("Loading TTS model...")
-    tts_model = TTSModel.load_model()
-    print("TTS model loaded!")
-    yield
-
-
-app = FastAPI(title="Inkvoice", lifespan=lifespan)
+app = FastAPI(title="Inkvoice")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -49,8 +47,11 @@ async def index():
 
 @app.get("/api/voices")
 async def get_voices():
-    """Return list of available voices."""
-    return {"voices": BUILTIN_VOICES}
+    """Return list of available Gemini TTS voices with metadata."""
+    return {
+        "voices": get_voice_list(),
+        "default": DEFAULT_VOICE,
+    }
 
 
 # Cache for voice previews
@@ -59,11 +60,10 @@ voice_preview_cache: dict[str, bytes] = {}
 
 @app.get("/api/voice-preview/{voice}")
 async def get_voice_preview(voice: str):
-    """Generate a short audio preview for a voice."""
+    """Generate a short audio preview for a voice using Gemini TTS."""
     from fastapi.responses import Response
-    import numpy as np
 
-    if voice not in BUILTIN_VOICES:
+    if voice not in VOICES:
         raise HTTPException(status_code=404, detail="Voice not found")
 
     # Check cache first
@@ -74,13 +74,9 @@ async def get_voice_preview(voice: str):
             headers={"Cache-Control": "public, max-age=86400"}
         )
 
-    # Generate preview
-    preview_text = f"Hello, I'm {voice}. I'll be reading your book."
-
     try:
-        voice_state = tts_model.get_state_for_audio_prompt(voice)
-        audio = tts_model.generate_audio(voice_state, preview_text)
-        audio_np = audio.numpy()
+        # Generate preview using Gemini TTS
+        audio_np, sample_rate = await asyncio.to_thread(generate_preview, voice)
 
         # Convert to MP3
         if audio_np.dtype != np.int16:
@@ -88,8 +84,8 @@ async def get_voice_preview(voice: str):
 
         encoder = lameenc.Encoder()
         encoder.set_bit_rate(128)
-        encoder.set_in_sample_rate(tts_model.sample_rate)
-        encoder.set_out_sample_rate(tts_model.sample_rate)
+        encoder.set_in_sample_rate(sample_rate)
+        encoder.set_out_sample_rate(sample_rate)
         encoder.set_channels(1)
         encoder.set_quality(2)
 
@@ -118,17 +114,15 @@ async def get_capabilities():
             "m4b": is_ffmpeg_available(),
         },
         "ffmpeg_available": is_ffmpeg_available(),
-        "ollama_available": is_ollama_available(),
+        "gemini_available": is_gemini_available(),
+        "tts_available": is_tts_available(),
+        "tts_engine": "Pocket TTS (local)",
         "text_processing_modes": [
             {"value": "none", "label": "None", "description": "No text processing"},
             {"value": "clean", "label": "Clean", "description": "Remove footnotes, artifacts"},
             {"value": "speed", "label": "Speed Read", "description": "~30% summary"},
             {"value": "summary", "label": "Summary", "description": "~10% brief summary"},
         ],
-        "llm_models": [
-            {"value": model, "label": desc} for model, desc in RECOMMENDED_MODELS
-        ],
-        "default_llm_model": DEFAULT_MODEL,
     }
 
 
@@ -183,21 +177,50 @@ async def upload_epub(epub_file: UploadFile = File(...)):
     }
 
 
+@app.get("/api/cover/{upload_id}")
+async def get_cover(upload_id: str):
+    """Return the cover image for an uploaded EPUB."""
+    from fastapi.responses import Response
+
+    if upload_id not in uploads:
+        raise HTTPException(status_code=404, detail="Upload not found")
+
+    upload = uploads[upload_id]
+    book = upload["book"]
+
+    if book.cover_image is None:
+        raise HTTPException(status_code=404, detail="No cover image")
+
+    # Determine media type from cover data
+    cover_data = book.cover_image
+    media_type = "image/jpeg"  # Default
+    if cover_data[:8] == b'\x89PNG\r\n\x1a\n':
+        media_type = "image/png"
+    elif cover_data[:2] == b'\xff\xd8':
+        media_type = "image/jpeg"
+    elif cover_data[:4] == b'GIF8':
+        media_type = "image/gif"
+
+    return Response(content=cover_data, media_type=media_type)
+
+
 @app.post("/api/convert")
 async def start_conversion(
     upload_id: str = Form(None),
     selected_chapters: str = Form(None),  # JSON array of indices
-    voice: str = Form("alba"),
+    voice: str = Form(DEFAULT_VOICE),
     per_chapter: bool = Form(True),
     skip_existing: bool = Form(False),  # Resume support
     announce_chapters: bool = Form(False),  # Chapter announcements
     output_format: str = Form("mp3"),  # mp3 or m4b
     text_processing: str = Form("none"),  # none, clean, speed, summary
-    llm_model: str = Form(None),  # LLM model for text processing
-    custom_voice: UploadFile = File(None),
     epub_file: UploadFile = File(None),  # For backwards compatibility
 ):
-    """Start EPUB to audio conversion (MP3 or M4B)."""
+    """Start EPUB to audio conversion (MP3 or M4B) using Gemini TTS."""
+    # Check TTS availability
+    if not is_tts_available():
+        raise HTTPException(status_code=503, detail="Gemini TTS not configured. Set GEMINI_API_KEY environment variable.")
+
     # Validate output format
     output_format = output_format.lower()
     if output_format not in ("mp3", "m4b"):
@@ -205,6 +228,10 @@ async def start_conversion(
 
     if output_format == "m4b" and not is_ffmpeg_available():
         raise HTTPException(status_code=400, detail="M4B format requires ffmpeg (not installed on server)")
+
+    # Validate voice
+    if voice not in VOICES:
+        voice = DEFAULT_VOICE
 
     job_id = str(uuid.uuid4())
     job_dir = Path(tempfile.mkdtemp(prefix=f"epub2mp3_{job_id}_"))
@@ -230,35 +257,33 @@ async def start_conversion(
     else:
         raise HTTPException(status_code=400, detail="No EPUB file provided")
 
-    # Handle custom voice if provided
-    voice_to_use = voice
-    if custom_voice and custom_voice.filename:
-        custom_voice_path = job_dir / "custom_voice.wav"
-        with open(custom_voice_path, "wb") as f:
-            shutil.copyfileobj(custom_voice.file, f)
-        voice_to_use = str(custom_voice_path)
-
-    # Initialize job state
+    # Initialize job state with detailed progress tracking
     jobs[job_id] = {
         "status": "processing",
         "progress": 0,
         "message": "Starting...",
         "output_dir": job_dir / "output",
         "job_dir": job_dir,
-        "files": []
+        "files": [],
+        # Detailed progress info
+        "details": {
+            "chapter_current": 0,
+            "chapter_total": 0,
+            "chapter_title": "",
+            "stage": "initializing",  # initializing, parsing, text_processing, tts, encoding, finalizing
+            "start_time": time.time(),
+            "words_processed": 0,
+            "words_total": 0,
+        }
     }
 
     # Validate text processing mode
     if text_processing not in ("none", "clean", "speed", "summary"):
         text_processing = "none"
 
-    # Use default LLM model if not specified
-    if llm_model is None:
-        llm_model = DEFAULT_MODEL
-
     # Run conversion in background
     asyncio.create_task(run_conversion(
-        job_id, epub_path, voice_to_use, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format, text_processing, llm_model
+        job_id, epub_path, voice, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format, text_processing
     ))
 
     return {"job_id": job_id}
@@ -274,21 +299,21 @@ async def run_conversion(
     announce_chapters: bool = False,
     output_format: str = "mp3",
     text_processing: str = "none",
-    llm_model: str = None,
 ):
-    """Run the conversion in the background."""
+    """Run the conversion in the background using Gemini TTS."""
     job = jobs[job_id]
 
-    def progress_callback(current: int, total: int, message: str):
+    def progress_callback(current: int, total: int, message: str, details: dict = None):
         job["progress"] = current
         job["message"] = message
+        if details:
+            job["details"].update(details)
 
     try:
         output_files = await asyncio.to_thread(
             convert_epub_to_mp3,
             epub_path,
             str(job["output_dir"]),
-            tts_model,
             voice,
             per_chapter,
             progress_callback,
@@ -297,7 +322,6 @@ async def run_conversion(
             announce_chapters,
             output_format,
             text_processing,
-            llm_model,
         )
 
         job["status"] = "complete"
@@ -335,15 +359,38 @@ async def stream_progress(job_id: str):
     async def event_generator():
         job = jobs[job_id]
         last_progress = -1
+        last_message = ""
 
         while True:
-            if job["progress"] != last_progress or job["status"] in ["complete", "error"]:
+            # Update on progress change, message change, or status change
+            if (job["progress"] != last_progress or
+                job["message"] != last_message or
+                job["status"] in ["complete", "error"]):
+
                 last_progress = job["progress"]
+                last_message = job["message"]
+
+                # Calculate elapsed and estimated remaining time
+                details = job.get("details", {})
+                start_time = details.get("start_time", time.time())
+                elapsed = time.time() - start_time
+
+                # Estimate remaining time based on progress
+                estimated_remaining = None
+                if job["progress"] > 5:  # Only estimate after some progress
+                    total_estimated = elapsed / (job["progress"] / 100)
+                    estimated_remaining = max(0, total_estimated - elapsed)
+
                 data = json.dumps({
                     "status": job["status"],
                     "progress": job["progress"],
                     "message": job["message"],
-                    "files": job.get("files", [])
+                    "files": job.get("files", []),
+                    "details": {
+                        **details,
+                        "elapsed_seconds": int(elapsed),
+                        "estimated_remaining_seconds": int(estimated_remaining) if estimated_remaining else None,
+                    }
                 })
                 yield f"data: {data}\n\n"
 

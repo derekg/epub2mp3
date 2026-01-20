@@ -6,607 +6,970 @@
     <title>Inkvoice</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #0c0a09;
-            --card: #1c1917;
-            --card-elevated: #292524;
-            --border: #44403c;
-            --border-subtle: #292524;
-            --text: #fafaf9;
-            --text-secondary: #d6d3d1;
-            --text-dim: #a8a29e;
-            --ink: #c4a77d;
-            --ink-glow: #d4b896;
-            --ink-dark: #92764a;
-            --voice: #7dd3c4;
-            --voice-glow: #99e5d8;
-            --success: #86efac;
-            --error: #fca5a5;
+            --bg: #fafafa;
+            --surface: #ffffff;
+            --surface-raised: #ffffff;
+            --border: #e5e5e5;
+            --border-subtle: #f0f0f0;
+            --text: #171717;
+            --text-secondary: #525252;
+            --text-muted: #a3a3a3;
+            --accent: #171717;
+            --accent-hover: #404040;
+            --success: #22c55e;
+            --error: #ef4444;
         }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg);
-            background-image:
-                radial-gradient(ellipse at top, rgba(196, 167, 125, 0.03) 0%, transparent 50%),
-                radial-gradient(ellipse at bottom right, rgba(125, 211, 196, 0.02) 0%, transparent 50%);
             color: var(--text);
             min-height: 100vh;
-            padding: 40px 20px;
             line-height: 1.6;
         }
+
         .container {
-            max-width: 580px;
+            max-width: 640px;
             margin: 0 auto;
+            padding: 48px 24px;
         }
-        .brand {
+
+        /* Header */
+        header {
             text-align: center;
-            margin-bottom: 32px;
+            margin-bottom: 48px;
         }
-        h1 {
+
+        .logo {
             font-family: 'Crimson Pro', Georgia, serif;
             font-size: 2.5rem;
             font-weight: 600;
-            letter-spacing: -0.02em;
-            margin-bottom: 4px;
-            background: linear-gradient(135deg, var(--ink) 0%, var(--ink-glow) 50%, var(--voice) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .subtitle {
-            color: var(--text-dim);
-            font-size: 0.95rem;
-        }
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border-subtle);
-            border-radius: 16px;
-            padding: 28px;
+            letter-spacing: -0.03em;
+            color: var(--text);
             margin-bottom: 16px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.2);
         }
+
+        .intro {
+            max-width: 420px;
+            margin: 0 auto;
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.7;
+        }
+
+        .intro strong {
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .card-number {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--text);
+            color: var(--surface);
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text);
+        }
+
+        /* Drop zone */
         .drop-zone {
             border: 2px dashed var(--border);
-            border-radius: 12px;
+            border-radius: 8px;
             padding: 48px 24px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s ease;
-            background: rgba(255,255,255,0.01);
+            transition: all 0.2s ease;
+            background: var(--bg);
         }
-        .drop-zone:hover, .drop-zone.dragover {
-            border-color: var(--ink);
-            background: rgba(196, 167, 125, 0.05);
+
+        .drop-zone:hover {
+            border-color: var(--text-muted);
+            background: #f5f5f5;
         }
+
+        .drop-zone.dragover {
+            border-color: var(--accent);
+            background: #f0f0f0;
+        }
+
         .drop-zone.has-file {
-            border-color: var(--voice);
-            background: rgba(125, 211, 196, 0.05);
             border-style: solid;
+            border-color: var(--accent);
+            background: var(--surface);
         }
-        .drop-zone p { color: var(--text-dim); font-size: 0.95rem; }
-        .drop-zone .icon {
-            margin-bottom: 16px;
-            color: var(--ink);
-            opacity: 0.7;
-            transition: all 0.3s ease;
+
+        .drop-zone-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 16px;
+            color: var(--text-muted);
         }
-        .drop-zone:hover .icon { opacity: 1; transform: scale(1.05); }
+
+        .drop-zone-text {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .drop-zone-hint {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            margin-top: 8px;
+        }
+
         .file-input { display: none; }
 
         /* Book info */
         .book-info {
             display: none;
-            padding: 20px;
-            background: linear-gradient(135deg, rgba(196, 167, 125, 0.08) 0%, rgba(125, 211, 196, 0.05) 100%);
-            border: 1px solid rgba(196, 167, 125, 0.15);
-            border-radius: 12px;
-            margin-bottom: 20px;
+            padding: 20px 24px;
+            background: var(--bg);
+            border-radius: 8px;
+            margin-top: 20px;
         }
-        .book-info h2 {
+
+        .book-info.has-cover {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .book-info.no-cover {
+            display: block;
+        }
+
+        .book-cover {
+            width: 80px;
+            height: auto;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+
+        .book-cover:not([src]), .book-cover[src=""] {
+            display: none;
+        }
+
+        .book-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .book-title {
             font-family: 'Crimson Pro', Georgia, serif;
             font-size: 1.25rem;
             font-weight: 500;
             margin-bottom: 4px;
-            color: var(--text);
+            line-height: 1.3;
         }
-        .book-info .author { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 6px; }
-        .book-info .book-stats { color: var(--text-dim); font-size: 0.85rem; }
+
+        .book-author {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-style: italic;
+            margin-bottom: 8px;
+        }
+
+        .book-stats {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
 
         /* Chapter list */
-        .chapter-section { display: none; }
-        .chapter-header {
+        .chapters-card { display: none; }
+
+        .chapter-controls {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
         }
-        .chapter-header h3 { font-size: 0.85rem; color: var(--text-dim); font-weight: 500; }
-        .select-actions button {
+
+        .chapter-info {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .chapter-actions {
+            display: flex;
+            gap: 16px;
+        }
+
+        .chapter-actions button {
             background: none;
             border: none;
-            color: var(--ink);
+            color: var(--text-secondary);
             cursor: pointer;
             font-size: 0.85rem;
-            margin-left: 12px;
             font-weight: 500;
-            transition: color 0.2s;
+            padding: 0;
+            text-decoration: underline;
+            text-underline-offset: 2px;
         }
-        .select-actions button:hover { color: var(--ink-glow); }
+
+        .chapter-actions button:hover {
+            color: var(--text);
+        }
+
         .chapter-list {
-            max-height: 280px;
+            max-height: 300px;
             overflow-y: auto;
-            border: 1px solid var(--border-subtle);
-            border-radius: 10px;
-            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
         }
-        .chapter-list::-webkit-scrollbar { width: 6px; }
-        .chapter-list::-webkit-scrollbar-track { background: transparent; }
-        .chapter-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
         .chapter-item {
             display: flex;
             align-items: center;
-            padding: 12px 16px;
+            padding: 14px 16px;
             border-bottom: 1px solid var(--border-subtle);
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.15s;
         }
+
         .chapter-item:last-child { border-bottom: none; }
-        .chapter-item:hover { background: rgba(196, 167, 125, 0.05); }
+        .chapter-item:hover { background: var(--bg); }
+
         .chapter-item input[type="checkbox"] {
             width: 18px;
             height: 18px;
-            margin-right: 12px;
-            accent-color: var(--ink);
+            margin-right: 14px;
+            accent-color: var(--accent);
         }
+
         .chapter-item .title {
             flex: 1;
+            font-size: 0.9rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            font-size: 0.9rem;
         }
-        .chapter-item .length {
-            color: var(--text-dim);
+
+        .chapter-item .meta {
             font-size: 0.8rem;
+            color: var(--text-muted);
             margin-left: 12px;
         }
-        .matter-badge {
-            font-size: 0.6rem;
-            padding: 3px 6px;
+
+        .badge {
+            font-size: 0.65rem;
+            padding: 2px 6px;
             border-radius: 4px;
             margin-left: 8px;
             text-transform: uppercase;
             font-weight: 600;
-            letter-spacing: 0.03em;
-        }
-        .matter-badge.front {
-            background: rgba(196, 167, 125, 0.15);
-            color: var(--ink);
-        }
-        .matter-badge.back {
-            background: rgba(125, 211, 196, 0.15);
-            color: var(--voice);
+            letter-spacing: 0.02em;
+            background: var(--bg);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
         }
 
         /* Options */
-        .options { margin: 24px 0; }
+        .options-card { display: none; }
+
+        .option-group {
+            margin-bottom: 24px;
+        }
+
+        .option-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .option-group-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
         .option-row {
             display: flex;
             align-items: center;
-            margin-bottom: 16px;
+            gap: 12px;
+            margin-bottom: 12px;
         }
-        .option-row > label:first-child {
-            width: 80px;
-            font-size: 0.85rem;
-            color: var(--text-dim);
-            font-weight: 500;
+
+        .option-row:last-child {
+            margin-bottom: 0;
         }
+
         select {
             flex: 1;
-            max-width: 180px;
-            padding: 10px 14px;
-            background: var(--bg);
-            border: 1px solid var(--border-subtle);
-            border-radius: 8px;
+            padding: 10px 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
             color: var(--text);
-            font-size: 16px;
-            transition: border-color 0.2s;
+            font-size: 0.9rem;
+            cursor: pointer;
         }
-        select:hover { border-color: var(--border); }
-        select:focus { outline: none; border-color: var(--ink); }
 
-        /* Voice preview */
+        select:hover { border-color: var(--text-muted); }
+        select:focus { outline: none; border-color: var(--accent); }
+
         .voice-row {
             display: flex;
-            align-items: center;
-            gap: 10px;
+            gap: 8px;
+            flex: 1;
         }
+
+        .voice-row select { flex: 1; }
+
         .preview-btn {
-            width: 38px;
-            height: 38px;
-            border-radius: 50%;
-            border: 1px solid var(--border-subtle);
-            background: var(--bg);
-            color: var(--text-dim);
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-muted);
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.25s ease;
+            transition: all 0.2s;
             flex-shrink: 0;
         }
-        .preview-btn:hover { border-color: var(--voice); color: var(--voice); background: rgba(125, 211, 196, 0.1); }
-        .preview-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .preview-btn.playing { background: var(--voice); color: var(--bg); border-color: var(--voice); }
-        .checkbox-row {
+
+        .preview-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .preview-btn.playing {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--surface);
+        }
+
+        .checkbox-option {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
             cursor: pointer;
-            font-size: 0.9rem;
+            padding: 8px 0;
         }
-        .checkbox-row input { accent-color: var(--ink); width: 18px; height: 18px; }
-        .checkbox-row span { color: var(--text-secondary); }
+
+        .checkbox-option input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent);
+            margin-top: 1px;
+        }
+
+        .checkbox-label {
+            flex: 1;
+        }
+
+        .checkbox-label-text {
+            font-size: 0.9rem;
+            color: var(--text);
+        }
+
+        .checkbox-label-hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .processing-note {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: var(--bg);
+            border-radius: 6px;
+        }
+
+        .processing-note.ready {
+            color: var(--text-secondary);
+        }
+
+        .processing-note.warning {
+            color: var(--text-secondary);
+        }
 
         /* Buttons */
-        button.primary {
+        .convert-btn {
             width: 100%;
-            padding: 14px 20px;
-            background: linear-gradient(135deg, var(--ink) 0%, var(--ink-dark) 100%);
-            color: var(--bg);
+            padding: 16px 24px;
+            background: var(--accent);
+            color: var(--surface);
             border: none;
-            border-radius: 10px;
-            font-size: 0.95rem;
+            border-radius: 8px;
+            font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.25s ease;
-            box-shadow: 0 2px 8px rgba(196, 167, 125, 0.2);
+            transition: all 0.2s;
+            margin-top: 24px;
         }
-        button.primary:hover:not(:disabled) {
-            background: linear-gradient(135deg, var(--ink-glow) 0%, var(--ink) 100%);
-            box-shadow: 0 4px 16px rgba(196, 167, 125, 0.3);
-            transform: translateY(-1px);
+
+        .convert-btn:hover:not(:disabled) {
+            background: var(--accent-hover);
         }
-        button.primary:disabled {
-            background: var(--border-subtle);
-            color: var(--text-dim);
+
+        .convert-btn:disabled {
+            background: var(--border);
+            color: var(--text-muted);
             cursor: not-allowed;
-            box-shadow: none;
         }
 
         /* Progress */
-        .progress-section { display: none; margin-top: 24px; }
+        .progress-section {
+            display: none;
+            margin-top: 32px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border);
+        }
+
         .progress-bar {
             height: 4px;
-            background: var(--border-subtle);
+            background: var(--border);
             border-radius: 2px;
             overflow: hidden;
         }
+
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, var(--ink) 0%, var(--voice) 100%);
+            background: var(--accent);
             width: 0%;
             transition: width 0.3s ease;
         }
-        .progress-text {
-            text-align: center;
-            margin-top: 12px;
-            color: var(--text-dim);
-            font-size: 0.85rem;
-        }
 
-        /* Downloads */
-        .downloads { display: none; margin-top: 24px; }
-        .downloads h3 {
-            font-size: 0.9rem;
-            color: var(--voice);
-            margin-bottom: 12px;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .downloads h3::before {
-            content: '';
-            width: 8px;
-            height: 8px;
-            background: var(--voice);
-            border-radius: 50%;
-            animation: pulse 2s ease-in-out infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .download-list { list-style: none; }
-        .download-list li {
+        .progress-info {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            padding: 12px 14px;
-            background: var(--bg);
-            border: 1px solid var(--border-subtle);
-            border-radius: 8px;
-            margin-bottom: 8px;
-            font-size: 0.9rem;
-            transition: border-color 0.2s;
-        }
-        .download-list li:hover { border-color: var(--border); }
-        .download-list a {
-            color: var(--ink);
-            text-decoration: none;
-            font-weight: 500;
-            transition: color 0.2s;
-        }
-        .download-list a:hover { color: var(--ink-glow); }
-        button.secondary {
-            width: 100%;
-            padding: 12px 16px;
-            background: transparent;
-            color: var(--voice);
-            border: 1px solid var(--voice);
-            border-radius: 10px;
-            font-size: 0.9rem;
-            font-weight: 500;
-            cursor: pointer;
-            margin-top: 12px;
-            transition: all 0.25s ease;
-        }
-        button.secondary:hover {
-            background: rgba(125, 211, 196, 0.1);
-        }
-
-        .error {
-            color: var(--error);
-            text-align: center;
             margin-top: 16px;
             font-size: 0.85rem;
         }
 
-        /* Steps indicator */
-        .steps {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 28px;
-        }
-        .step {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--border-subtle);
-            transition: all 0.3s ease;
-        }
-        .step.active {
-            background: var(--ink);
-            box-shadow: 0 0 8px rgba(196, 167, 125, 0.4);
+        .progress-status {
+            color: var(--text);
+            font-weight: 500;
         }
 
-        /* Mobile responsive */
+        .progress-percent {
+            color: var(--text-muted);
+        }
+
+        .progress-details {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-top: 20px;
+            padding: 16px;
+            background: var(--bg);
+            border-radius: 8px;
+        }
+
+        .progress-detail {
+            text-align: center;
+        }
+
+        .progress-detail-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .progress-detail-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 4px;
+        }
+
+        /* Downloads */
+        .downloads-section {
+            display: none;
+            margin-top: 32px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border);
+        }
+
+        .downloads-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .downloads-header h3 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .success-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+        }
+
+        .download-list {
+            list-style: none;
+        }
+
+        .download-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--bg);
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .download-list a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .download-list a:hover {
+            text-decoration: underline;
+        }
+
+        .download-all-btn {
+            width: 100%;
+            padding: 12px 16px;
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 12px;
+            transition: all 0.2s;
+        }
+
+        .download-all-btn:hover {
+            background: var(--bg);
+            border-color: var(--text-muted);
+        }
+
+        /* Error */
+        .error {
+            color: var(--error);
+            font-size: 0.9rem;
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: #fef2f2;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .error:not(:empty) {
+            display: block;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 32px 24px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        footer a {
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Mobile */
         @media (max-width: 480px) {
-            body { padding: 24px 16px; }
-            h1 { font-size: 2rem; }
-            .card { padding: 20px; }
-            .drop-zone { padding: 36px 20px; }
-            .option-row {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
-            }
-            .option-row > label:first-child { width: auto; margin-bottom: 4px; }
-            select { max-width: 100%; width: 100%; }
-            .voice-row { width: 100%; }
-            .voice-row select { flex: 1; }
-            .chapter-item { padding: 10px 12px; }
-            .chapter-item .title { font-size: 0.85rem; }
-            .chapter-item .length { font-size: 0.75rem; margin-left: 8px; }
-            .chapter-list { max-height: 240px; }
-            .book-info h2 { font-size: 1.1rem; }
-            .download-list li { flex-direction: column; gap: 8px; align-items: flex-start; }
+            .container { padding: 32px 16px; }
+            .card { padding: 24px 20px; }
+            .logo { font-size: 2rem; }
+            .progress-details { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="brand">
-            <h1>Inkvoice</h1>
-            <p class="subtitle">Turn your ebooks into audiobooks</p>
-        </div>
+        <header>
+            <h1 class="logo">Inkvoice</h1>
+            <p class="intro">
+                Convert any EPUB into a high-quality audiobook.
+                AI-powered text-to-speech that actually sounds good.
+            </p>
+        </header>
 
-        <div class="steps">
-            <div class="step active" id="step1"></div>
-            <div class="step" id="step2"></div>
-            <div class="step" id="step3"></div>
-        </div>
-
+        <!-- Step 1: Upload -->
         <div class="card">
-            <!-- Step 1: Upload -->
-            <div id="uploadSection">
-                <div class="drop-zone" id="dropZone">
-                    <div class="icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                            <path d="M12 8v6M9 11h6"/>
-                        </svg>
-                    </div>
-                    <p>Drop your EPUB here or click to browse</p>
-                    <input type="file" class="file-input" id="epubInput" accept=".epub">
-                </div>
+            <div class="card-header">
+                <span class="card-number">1</span>
+                <span class="card-title">Choose your book</span>
             </div>
 
-            <!-- Book info (shown after upload) -->
+            <div class="drop-zone" id="dropZone">
+                <svg class="drop-zone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+                <p class="drop-zone-text">Drop your EPUB here or click to browse</p>
+                <p class="drop-zone-hint">EPUB files only</p>
+                <input type="file" class="file-input" id="epubInput" accept=".epub">
+            </div>
+
             <div class="book-info" id="bookInfo">
-                <h2 id="bookTitle"></h2>
-                <p class="author" id="bookAuthor"></p>
-                <p class="book-stats" id="bookStats"></p>
-            </div>
-
-            <!-- Step 2: Chapter selection -->
-            <div class="chapter-section" id="chapterSection">
-                <div class="chapter-header">
-                    <h3>Select chapters <span id="selectionStats" style="font-weight: normal;"></span></h3>
-                    <div class="select-actions">
-                        <button onclick="selectAll()">All</button>
-                        <button onclick="selectNone()">None</button>
-                    </div>
+                <img class="book-cover" id="bookCover" src="" alt="">
+                <div class="book-details">
+                    <div class="book-title" id="bookTitle"></div>
+                    <div class="book-author" id="bookAuthor"></div>
+                    <div class="book-stats" id="bookStats"></div>
                 </div>
-                <div class="chapter-list" id="chapterList"></div>
+            </div>
+        </div>
+
+        <!-- Step 2: Chapters -->
+        <div class="card chapters-card" id="chaptersCard">
+            <div class="card-header">
+                <span class="card-number">2</span>
+                <span class="card-title">Select chapters</span>
             </div>
 
-            <!-- Options -->
-            <div class="options" id="optionsSection" style="display: none;">
+            <div class="chapter-controls">
+                <span class="chapter-info" id="selectionStats"></span>
+                <div class="chapter-actions">
+                    <button onclick="selectAll()">Select all</button>
+                    <button onclick="selectNone()">Clear</button>
+                </div>
+            </div>
+
+            <div class="chapter-list" id="chapterList"></div>
+        </div>
+
+        <!-- Step 3: Options -->
+        <div class="card options-card" id="optionsCard">
+            <div class="card-header">
+                <span class="card-number">3</span>
+                <span class="card-title">Configure output</span>
+            </div>
+
+            <div class="option-group">
+                <div class="option-group-title">Voice</div>
                 <div class="option-row">
-                    <label>Voice</label>
                     <div class="voice-row">
-                        <select id="voiceSelect">
-                            <option value="alba">Alba</option>
-                            <option value="marius">Marius</option>
-                            <option value="javert">Javert</option>
-                            <option value="jean">Jean</option>
-                            <option value="fantine">Fantine</option>
-                            <option value="cosette">Cosette</option>
-                            <option value="eponine">Eponine</option>
-                            <option value="azelma">Azelma</option>
-                        </select>
+                        <select id="voiceSelect"></select>
                         <button type="button" class="preview-btn" id="previewBtn" title="Preview voice">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M8 5v14l11-7z"/>
                             </svg>
                         </button>
                     </div>
                 </div>
-                <div class="option-row">
-                    <label>Format</label>
-                    <select id="formatSelect">
-                        <option value="mp3">MP3</option>
-                        <option value="m4b" id="m4bOption" disabled>M4B Audiobook</option>
-                    </select>
-                </div>
-                <div class="option-row" id="perChapterRow">
-                    <label class="checkbox-row">
-                        <input type="checkbox" id="perChapter" checked>
-                        <span>One file per chapter</span>
-                    </label>
-                </div>
-                <div class="option-row" id="skipExistingRow">
-                    <label class="checkbox-row">
-                        <input type="checkbox" id="skipExisting">
-                        <span>Skip existing files (resume)</span>
-                    </label>
-                </div>
-                <div class="option-row">
-                    <label class="checkbox-row">
-                        <input type="checkbox" id="announceChapters">
-                        <span>Announce chapter titles</span>
-                    </label>
-                </div>
-                <div class="option-row" id="textProcessingRow">
-                    <label>Text</label>
-                    <select id="textProcessingSelect">
-                        <option value="none">None</option>
-                        <option value="clean">Clean (remove artifacts)</option>
-                        <option value="speed">Speed Read (~30%)</option>
-                        <option value="summary">Summary (~10%)</option>
-                    </select>
-                </div>
-                <div class="option-row" id="llmModelRow" style="display: none;">
-                    <label>Model</label>
-                    <select id="llmModelSelect">
-                    </select>
-                </div>
-                <p class="ollama-note" id="ollamaNote" style="display: none; font-size: 0.8rem; color: var(--text-dim); margin: -8px 0 16px 0;">
-                    <span id="ollamaStatus"></span>
-                </p>
             </div>
 
-            <button class="primary" id="convertBtn" disabled>Select an EPUB file</button>
+            <div class="option-group">
+                <div class="option-group-title">Format</div>
+                <div class="option-row">
+                    <select id="formatSelect">
+                        <option value="mp3">MP3 (separate files)</option>
+                        <option value="m4b" id="m4bOption" disabled>M4B audiobook (single file with chapters)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="option-group">
+                <div class="option-group-title">Text processing</div>
+                <div class="option-row">
+                    <select id="textProcessingSelect">
+                        <option value="none">Original text</option>
+                        <option value="clean">Narration-ready (remove footnotes, references)</option>
+                        <option value="speed">Condensed (~30% shorter)</option>
+                        <option value="summary">Key points only (~10%)</option>
+                    </select>
+                </div>
+                <div class="processing-note" id="processingNote" style="display: none;"></div>
+            </div>
+
+            <div class="option-group">
+                <div class="option-group-title">Options</div>
+                <label class="checkbox-option">
+                    <input type="checkbox" id="announceChapters">
+                    <div class="checkbox-label">
+                        <div class="checkbox-label-text">Announce chapter titles</div>
+                        <div class="checkbox-label-hint">Voice will read the chapter name at the start</div>
+                    </div>
+                </label>
+                <label class="checkbox-option" id="perChapterOption">
+                    <input type="checkbox" id="perChapter" checked>
+                    <div class="checkbox-label">
+                        <div class="checkbox-label-text">One file per chapter</div>
+                        <div class="checkbox-label-hint">Creates separate MP3 files for each chapter</div>
+                    </div>
+                </label>
+            </div>
+
+            <button class="convert-btn" id="convertBtn" disabled>Select an EPUB to begin</button>
+
+            <div class="error" id="errorText"></div>
 
             <div class="progress-section" id="progressSection">
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill"></div>
                 </div>
-                <p class="progress-text" id="progressText">Starting...</p>
+                <div class="progress-info">
+                    <span class="progress-status" id="progressStatus">Starting...</span>
+                    <span class="progress-percent" id="progressPercent">0%</span>
+                </div>
+                <div class="progress-details">
+                    <div class="progress-detail">
+                        <div class="progress-detail-value" id="progressChapter">-</div>
+                        <div class="progress-detail-label">Chapter</div>
+                    </div>
+                    <div class="progress-detail">
+                        <div class="progress-detail-value" id="progressElapsed">0:00</div>
+                        <div class="progress-detail-label">Elapsed</div>
+                    </div>
+                    <div class="progress-detail">
+                        <div class="progress-detail-value" id="progressRemaining">--:--</div>
+                        <div class="progress-detail-label">Remaining</div>
+                    </div>
+                    <div class="progress-detail">
+                        <div class="progress-detail-value" id="progressWords">-</div>
+                        <div class="progress-detail-label">Words</div>
+                    </div>
+                </div>
             </div>
 
-            <p class="error" id="errorText"></p>
-
-            <div class="downloads" id="downloads">
-                <h3>Ready for download</h3>
+            <div class="downloads-section" id="downloadsSection">
+                <div class="downloads-header">
+                    <span class="success-dot"></span>
+                    <h3>Ready for download</h3>
+                </div>
                 <ul class="download-list" id="downloadList"></ul>
-                <button class="secondary" id="downloadAllBtn">Download All (ZIP)</button>
+                <button class="download-all-btn" id="downloadAllBtn">Download all as ZIP</button>
             </div>
         </div>
     </div>
 
+    <footer>
+        Powered by <a href="https://github.com/kyutai-labs/pocket-tts" target="_blank">Pocket TTS</a>
+        and <a href="https://ai.google.dev/" target="_blank">Gemini</a>
+    </footer>
+
     <script>
+        // Elements
         const dropZone = document.getElementById('dropZone');
         const epubInput = document.getElementById('epubInput');
         const bookInfo = document.getElementById('bookInfo');
+        const bookCover = document.getElementById('bookCover');
         const bookTitle = document.getElementById('bookTitle');
         const bookAuthor = document.getElementById('bookAuthor');
         const bookStats = document.getElementById('bookStats');
-        const chapterSection = document.getElementById('chapterSection');
+        const chaptersCard = document.getElementById('chaptersCard');
         const chapterList = document.getElementById('chapterList');
-        const optionsSection = document.getElementById('optionsSection');
+        const selectionStats = document.getElementById('selectionStats');
+        const optionsCard = document.getElementById('optionsCard');
         const voiceSelect = document.getElementById('voiceSelect');
         const formatSelect = document.getElementById('formatSelect');
         const m4bOption = document.getElementById('m4bOption');
-        const perChapter = document.getElementById('perChapter');
-        const perChapterRow = document.getElementById('perChapterRow');
-        const skipExisting = document.getElementById('skipExisting');
-        const skipExistingRow = document.getElementById('skipExistingRow');
+        const textProcessingSelect = document.getElementById('textProcessingSelect');
+        const processingNote = document.getElementById('processingNote');
         const announceChapters = document.getElementById('announceChapters');
+        const perChapter = document.getElementById('perChapter');
+        const perChapterOption = document.getElementById('perChapterOption');
         const convertBtn = document.getElementById('convertBtn');
+        const errorText = document.getElementById('errorText');
         const progressSection = document.getElementById('progressSection');
         const progressFill = document.getElementById('progressFill');
-        const progressText = document.getElementById('progressText');
-        const errorText = document.getElementById('errorText');
-        const downloads = document.getElementById('downloads');
+        const progressStatus = document.getElementById('progressStatus');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressChapter = document.getElementById('progressChapter');
+        const progressElapsed = document.getElementById('progressElapsed');
+        const progressRemaining = document.getElementById('progressRemaining');
+        const progressWords = document.getElementById('progressWords');
+        const downloadsSection = document.getElementById('downloadsSection');
         const downloadList = document.getElementById('downloadList');
         const downloadAllBtn = document.getElementById('downloadAllBtn');
+        const previewBtn = document.getElementById('previewBtn');
 
+        // State
         let uploadId = null;
         let chapters = [];
         let currentJobId = null;
         let m4bAvailable = false;
-        let ollamaAvailable = false;
+        let geminiAvailable = false;
+        let ttsAvailable = false;
         let previewAudio = null;
-        let defaultLlmModel = 'gemma3:4b';
-        const textProcessingRow = document.getElementById('textProcessingRow');
-        const textProcessingSelect = document.getElementById('textProcessingSelect');
-        const llmModelRow = document.getElementById('llmModelRow');
-        const llmModelSelect = document.getElementById('llmModelSelect');
-        const ollamaNote = document.getElementById('ollamaNote');
-        const ollamaStatus = document.getElementById('ollamaStatus');
+        let voiceData = [];
 
-        // Show/hide model selection based on text processing choice
+        // Icons
+        const playIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        const stopIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>';
+        const loadingIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></path></svg>';
+
+        // Load capabilities
+        async function loadCapabilities() {
+            try {
+                const response = await fetch('/api/capabilities');
+                const data = await response.json();
+
+                m4bAvailable = data.formats.m4b;
+                m4bOption.disabled = !m4bAvailable;
+                m4bOption.textContent = m4bAvailable
+                    ? 'M4B audiobook (single file with chapters)'
+                    : 'M4B (requires ffmpeg)';
+
+                // Default to M4B if available
+                if (m4bAvailable) {
+                    formatSelect.value = 'm4b';
+                    perChapterOption.style.opacity = '0.5';
+                    perChapter.disabled = true;
+                    perChapter.checked = false;
+                }
+
+                geminiAvailable = data.gemini_available;
+                ttsAvailable = data.tts_available;
+
+                // Default to "clean" if Gemini is available
+                if (geminiAvailable) {
+                    textProcessingSelect.value = 'clean';
+                    processingNote.style.display = 'block';
+                    processingNote.className = 'processing-note ready';
+                    processingNote.textContent = 'Gemini removes footnotes, URLs, and other non-spoken content';
+                }
+
+                if (!ttsAvailable) {
+                    convertBtn.textContent = 'TTS not available';
+                    showError('TTS engine not configured. Please check installation.');
+                }
+            } catch (e) {
+                console.error('Failed to load capabilities:', e);
+            }
+        }
+
+        function updateButtonText() {
+            if (uploadId) {
+                convertBtn.textContent = `Convert to ${formatSelect.value.toUpperCase()}`;
+            }
+        }
+
+        // Load voices
+        async function loadVoices() {
+            try {
+                const response = await fetch('/api/voices');
+                const data = await response.json();
+                voiceData = data.voices;
+
+                voiceSelect.innerHTML = '';
+
+                const groups = {
+                    narration: { label: 'Narration', voices: [] },
+                    casual: { label: 'Casual', voices: [] },
+                    neutral: { label: 'Neutral', voices: [] },
+                    character: { label: 'Character', voices: [] }
+                };
+
+                voiceData.forEach(v => {
+                    const group = groups[v.best_for] || groups.neutral;
+                    group.voices.push(v);
+                });
+
+                for (const [key, group] of Object.entries(groups)) {
+                    if (group.voices.length === 0) continue;
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = group.label;
+
+                    group.voices.forEach(v => {
+                        const option = document.createElement('option');
+                        option.value = v.name;
+                        option.textContent = `${v.name} — ${v.characteristic}`;
+                        if (v.name === data.default) option.selected = true;
+                        optgroup.appendChild(option);
+                    });
+
+                    voiceSelect.appendChild(optgroup);
+                }
+            } catch (e) {
+                console.error('Failed to load voices:', e);
+            }
+        }
+
+        // Initialize
+        loadCapabilities();
+        loadVoices();
+
+        // Text processing note
         textProcessingSelect.addEventListener('change', () => {
-            const needsLlm = textProcessingSelect.value !== 'none';
-            llmModelRow.style.display = needsLlm && ollamaAvailable ? 'flex' : 'none';
-            // Show warning if LLM selected but Ollama not available
-            if (needsLlm && !ollamaAvailable) {
-                ollamaNote.style.display = 'block';
-                ollamaStatus.innerHTML = '⚠️ Ollama not running. Will use basic regex cleaning instead. <a href="https://ollama.com" target="_blank" style="color: var(--ink);">Install Ollama</a>';
-            } else if (needsLlm && ollamaAvailable) {
-                ollamaNote.style.display = 'block';
-                ollamaStatus.textContent = '✓ Ollama connected';
+            const mode = textProcessingSelect.value;
+            if (mode === 'none') {
+                processingNote.style.display = 'none';
+            } else if (mode === 'clean') {
+                processingNote.style.display = 'block';
+                processingNote.className = 'processing-note' + (geminiAvailable ? ' ready' : ' warning');
+                processingNote.textContent = geminiAvailable
+                    ? 'Gemini removes footnotes, URLs, and other non-spoken content'
+                    : 'Gemini not configured — basic cleanup only';
+            } else if (mode === 'speed') {
+                processingNote.style.display = 'block';
+                processingNote.className = 'processing-note' + (geminiAvailable ? ' ready' : ' warning');
+                processingNote.textContent = geminiAvailable
+                    ? 'Gemini condenses while preserving key information'
+                    : 'Requires Gemini API';
             } else {
-                ollamaNote.style.display = 'none';
+                processingNote.style.display = 'block';
+                processingNote.className = 'processing-note' + (geminiAvailable ? ' ready' : ' warning');
+                processingNote.textContent = geminiAvailable
+                    ? 'Gemini extracts main ideas and conclusions'
+                    : 'Requires Gemini API';
             }
         });
 
-        // Voice preview
-        const previewBtn = document.getElementById('previewBtn');
-        const playIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-        const stopIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>';
-        const loadingIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></path></svg>';
+        // Format change
+        formatSelect.addEventListener('change', () => {
+            const isM4B = formatSelect.value === 'm4b';
+            perChapterOption.style.opacity = isM4B ? '0.5' : '1';
+            perChapter.disabled = isM4B;
+            if (isM4B) perChapter.checked = false;
+            updateButtonText();
+        });
 
+        // Voice preview
         previewBtn.addEventListener('click', async () => {
-            // If already playing, stop
             if (previewAudio && !previewAudio.paused) {
                 previewAudio.pause();
                 previewAudio.currentTime = 0;
@@ -615,26 +978,19 @@
                 return;
             }
 
-            const voice = voiceSelect.value;
             previewBtn.disabled = true;
             previewBtn.innerHTML = loadingIcon;
 
             try {
-                // Create audio element if needed
                 if (!previewAudio) {
                     previewAudio = new Audio();
                     previewAudio.addEventListener('ended', () => {
                         previewBtn.innerHTML = playIcon;
                         previewBtn.classList.remove('playing');
                     });
-                    previewAudio.addEventListener('error', () => {
-                        previewBtn.innerHTML = playIcon;
-                        previewBtn.classList.remove('playing');
-                        previewBtn.disabled = false;
-                    });
                 }
 
-                previewAudio.src = `/api/voice-preview/${voice}`;
+                previewAudio.src = `/api/voice-preview/${voiceSelect.value}`;
                 await previewAudio.play();
                 previewBtn.innerHTML = stopIcon;
                 previewBtn.classList.add('playing');
@@ -645,78 +1001,13 @@
             previewBtn.disabled = false;
         });
 
-        // Stop preview when voice changes
         voiceSelect.addEventListener('change', () => {
             if (previewAudio && !previewAudio.paused) {
                 previewAudio.pause();
-                previewAudio.currentTime = 0;
                 previewBtn.innerHTML = playIcon;
                 previewBtn.classList.remove('playing');
             }
         });
-
-        // Load capabilities on startup
-        async function loadCapabilities() {
-            try {
-                const response = await fetch('/api/capabilities');
-                const data = await response.json();
-                m4bAvailable = data.formats.m4b;
-                if (m4bAvailable) {
-                    m4bOption.disabled = false;
-                    m4bOption.textContent = 'M4B Audiobook (with chapters)';
-                } else {
-                    m4bOption.textContent = 'M4B (requires ffmpeg)';
-                }
-
-                // Track Ollama availability
-                ollamaAvailable = data.ollama_available;
-
-                // Populate LLM model dropdown
-                if (data.llm_models && data.llm_models.length > 0) {
-                    llmModelSelect.innerHTML = '';
-                    data.llm_models.forEach(m => {
-                        const opt = document.createElement('option');
-                        opt.value = m.value;
-                        opt.textContent = m.label;
-                        llmModelSelect.appendChild(opt);
-                    });
-                }
-                if (data.default_llm_model) {
-                    defaultLlmModel = data.default_llm_model;
-                    llmModelSelect.value = defaultLlmModel;
-                }
-            } catch (e) {
-                console.error('Failed to load capabilities:', e);
-            }
-        }
-        loadCapabilities();
-
-        // Handle format changes
-        formatSelect.addEventListener('change', () => {
-            const isM4B = formatSelect.value === 'm4b';
-            // M4B is always a single file with chapters
-            if (isM4B) {
-                perChapterRow.style.opacity = '0.5';
-                perChapter.checked = false;
-                perChapter.disabled = true;
-                skipExistingRow.style.opacity = '0.5';
-                skipExisting.checked = false;
-                skipExisting.disabled = true;
-            } else {
-                perChapterRow.style.opacity = '1';
-                perChapter.disabled = false;
-                perChapter.checked = true;
-                skipExistingRow.style.opacity = '1';
-                skipExisting.disabled = false;
-            }
-            updateConvertButtonText();
-        });
-
-        function updateConvertButtonText() {
-            if (!uploadId) return;
-            const format = formatSelect.value.toUpperCase();
-            convertBtn.textContent = `Convert to ${format}`;
-        }
 
         // Drag and drop
         dropZone.addEventListener('click', () => epubInput.click());
@@ -738,14 +1029,14 @@
 
         async function handleFile(file) {
             dropZone.classList.add('has-file');
-            dropZone.querySelector('p').textContent = file.name;
-            errorText.textContent = '';
+            dropZone.querySelector('.drop-zone-text').textContent = 'Parsing...';
+            dropZone.querySelector('.drop-zone-hint').textContent = file.name;
+            clearError();
 
             const formData = new FormData();
             formData.append('epub_file', file);
 
             try {
-                dropZone.querySelector('p').textContent = 'Parsing...';
                 const response = await fetch('/api/upload', {
                     method: 'POST',
                     body: formData
@@ -759,71 +1050,58 @@
 
                 // Show book info
                 bookTitle.textContent = data.title;
-                bookAuthor.textContent = `by ${data.author}`;
+                bookAuthor.textContent = data.author ? `by ${data.author}` : '';
 
-                // Calculate and show stats
-                const totalWords = data.total_words;
-                const estMinutes = Math.round(totalWords / 150);  // ~150 words/min speaking rate
-                const hours = Math.floor(estMinutes / 60);
-                const mins = estMinutes % 60;
-                const durationStr = hours > 0 ? `~${hours}h ${mins}m` : `~${mins}m`;
-                const coverStr = data.has_cover ? '📖 ' : '';
-                bookStats.textContent = `${coverStr}${totalWords.toLocaleString()} words • ${durationStr} estimated`;
+                const hours = Math.floor(data.total_words / 150 / 60);
+                const mins = Math.round((data.total_words / 150) % 60);
+                const duration = hours > 0 ? `~${hours}h ${mins}m` : `~${mins} min`;
+                bookStats.textContent = `${data.total_words.toLocaleString()} words · ${duration} audio`;
 
-                bookInfo.style.display = 'block';
+                // Show cover if available
+                if (data.has_cover) {
+                    bookCover.src = `/api/cover/${uploadId}`;
+                    bookInfo.className = 'book-info has-cover';
+                } else {
+                    bookCover.src = '';
+                    bookInfo.className = 'book-info no-cover';
+                }
 
-                // Show chapters
+                dropZone.querySelector('.drop-zone-text').textContent = file.name;
+                dropZone.querySelector('.drop-zone-hint').textContent = 'Click to change';
+
+                // Show chapters and options
                 renderChapters();
-                chapterSection.style.display = 'block';
-                optionsSection.style.display = 'block';
+                chaptersCard.style.display = 'block';
+                optionsCard.style.display = 'block';
 
-                // Update button
                 convertBtn.disabled = false;
-                updateConvertButtonText();
+                convertBtn.textContent = `Convert to ${formatSelect.value.toUpperCase()}`;
 
-                // Update steps
-                document.getElementById('step2').classList.add('active');
-
-                dropZone.querySelector('p').textContent = file.name;
             } catch (error) {
                 showError(error.message);
                 dropZone.classList.remove('has-file');
-                dropZone.querySelector('p').textContent = 'Drop EPUB here or click to browse';
+                dropZone.querySelector('.drop-zone-text').textContent = 'Drop your EPUB here or click to browse';
+                dropZone.querySelector('.drop-zone-hint').textContent = 'EPUB files only';
             }
-        }
-
-        const selectionStats = document.getElementById('selectionStats');
-
-        function updateSelectionStats() {
-            const selected = getSelectedChapters();
-            const selectedWords = selected.reduce((sum, idx) => sum + chapters[idx].words, 0);
-            const estMinutes = Math.round(selectedWords / 150);
-            const hours = Math.floor(estMinutes / 60);
-            const mins = estMinutes % 60;
-            const durationStr = hours > 0 ? `~${hours}h ${mins}m` : `~${mins}m`;
-            selectionStats.textContent = `(${selected.length}/${chapters.length} • ${selectedWords.toLocaleString()} words • ${durationStr})`;
         }
 
         function renderChapters() {
             chapterList.innerHTML = '';
             chapters.forEach((ch, i) => {
+                const isContent = !ch.is_front_matter && !ch.is_back_matter;
                 const div = document.createElement('div');
                 div.className = 'chapter-item';
 
-                // Auto-deselect front/back matter
-                const isContent = !ch.is_front_matter && !ch.is_back_matter;
-                const checked = isContent ? 'checked' : '';
-
-                // Visual indicator for front/back matter
                 let badge = '';
-                if (ch.is_front_matter) badge = '<span class="matter-badge front">front</span>';
-                if (ch.is_back_matter) badge = '<span class="matter-badge back">back</span>';
+                if (ch.is_front_matter) badge = '<span class="badge">front</span>';
+                if (ch.is_back_matter) badge = '<span class="badge">back</span>';
 
                 div.innerHTML = `
-                    <input type="checkbox" ${checked} data-index="${i}">
+                    <input type="checkbox" ${isContent ? 'checked' : ''} data-index="${i}">
                     <span class="title">${ch.title}${badge}</span>
-                    <span class="length">${formatLength(ch.words)} words</span>
+                    <span class="meta">${formatWords(ch.words)}</span>
                 `;
+
                 div.addEventListener('click', (e) => {
                     if (e.target.tagName !== 'INPUT') {
                         const cb = div.querySelector('input');
@@ -837,9 +1115,17 @@
             updateSelectionStats();
         }
 
-        function formatLength(words) {
-            if (words < 1000) return words.toLocaleString();
-            return `${(words / 1000).toFixed(1)}k`;
+        function updateSelectionStats() {
+            const selected = getSelectedChapters();
+            const words = selected.reduce((sum, i) => sum + chapters[i].words, 0);
+            const mins = Math.round(words / 150);
+            const hours = Math.floor(mins / 60);
+            const duration = hours > 0 ? `${hours}h ${mins % 60}m` : `${mins}m`;
+            selectionStats.textContent = `${selected.length} of ${chapters.length} · ${words.toLocaleString()} words · ~${duration}`;
+        }
+
+        function formatWords(n) {
+            return n >= 1000 ? `${(n/1000).toFixed(1)}k` : n.toString();
         }
 
         function selectAll() {
@@ -853,13 +1139,11 @@
         }
 
         function getSelectedChapters() {
-            const selected = [];
-            chapterList.querySelectorAll('input:checked').forEach(cb => {
-                selected.push(parseInt(cb.dataset.index));
-            });
-            return selected;
+            return Array.from(chapterList.querySelectorAll('input:checked'))
+                .map(cb => parseInt(cb.dataset.index));
         }
 
+        // Conversion
         convertBtn.addEventListener('click', startConversion);
 
         async function startConversion() {
@@ -872,12 +1156,12 @@
             convertBtn.disabled = true;
             convertBtn.textContent = 'Converting...';
             progressSection.style.display = 'block';
-            downloads.style.display = 'none';
-            errorText.textContent = '';
-            progressFill.style.width = '0%';
-            progressText.textContent = 'Starting...';
+            downloadsSection.style.display = 'none';
+            clearError();
 
-            document.getElementById('step3').classList.add('active');
+            progressFill.style.width = '0%';
+            progressPercent.textContent = '0%';
+            progressStatus.textContent = 'Starting...';
 
             const formData = new FormData();
             formData.append('upload_id', uploadId);
@@ -885,10 +1169,8 @@
             formData.append('voice', voiceSelect.value);
             formData.append('output_format', formatSelect.value);
             formData.append('per_chapter', perChapter.checked);
-            formData.append('skip_existing', skipExisting.checked);
             formData.append('announce_chapters', announceChapters.checked);
             formData.append('text_processing', textProcessingSelect.value);
-            formData.append('llm_model', llmModelSelect.value || defaultLlmModel);
 
             try {
                 const response = await fetch('/api/convert', {
@@ -906,13 +1188,37 @@
             }
         }
 
+        function formatTime(seconds) {
+            if (seconds == null) return '--:--';
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return h > 0
+                ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+                : `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
         function listenForProgress(jobId) {
             const eventSource = new EventSource(`/api/progress/${jobId}`);
 
             eventSource.onmessage = (event) => {
                 const data = JSON.parse(event.data);
+
                 progressFill.style.width = `${data.progress}%`;
-                progressText.textContent = data.message;
+                progressPercent.textContent = `${Math.round(data.progress)}%`;
+                progressStatus.textContent = data.message;
+
+                if (data.details) {
+                    const d = data.details;
+                    if (d.chapter_total > 0) {
+                        progressChapter.textContent = `${d.chapter_current || 0}/${d.chapter_total}`;
+                    }
+                    progressElapsed.textContent = formatTime(d.elapsed_seconds);
+                    progressRemaining.textContent = formatTime(d.estimated_remaining_seconds);
+                    if (d.words_total > 0) {
+                        progressWords.textContent = `${formatWords(d.words_processed)}/${formatWords(d.words_total)}`;
+                    }
+                }
 
                 if (data.status === 'complete') {
                     eventSource.close();
@@ -930,8 +1236,8 @@
         }
 
         function showDownloads(jobId, files) {
-            updateConvertButtonText();
             convertBtn.disabled = false;
+            convertBtn.textContent = `Convert to ${formatSelect.value.toUpperCase()}`;
 
             downloadList.innerHTML = '';
             files.forEach(file => {
@@ -943,24 +1249,21 @@
                 downloadList.appendChild(li);
             });
 
-            // Hide "Download All" for single files
-            if (files.length > 1) {
-                downloadAllBtn.style.display = 'block';
-                downloadAllBtn.onclick = () => {
-                    window.location.href = `/api/download-all/${jobId}`;
-                };
-            } else {
-                downloadAllBtn.style.display = 'none';
-            }
+            downloadAllBtn.style.display = files.length > 1 ? 'block' : 'none';
+            downloadAllBtn.onclick = () => window.location.href = `/api/download-all/${jobId}`;
 
-            downloads.style.display = 'block';
+            downloadsSection.style.display = 'block';
         }
 
         function showError(message) {
             errorText.textContent = message;
-            convertBtn.textContent = 'Try Again';
+            convertBtn.textContent = 'Try again';
             convertBtn.disabled = false;
             progressSection.style.display = 'none';
+        }
+
+        function clearError() {
+            errorText.textContent = '';
         }
     </script>
 </body>

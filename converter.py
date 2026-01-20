@@ -8,21 +8,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from text_processor import process_chapter, ProcessingMode, is_ollama_available
+from text_processor import process_chapter, ProcessingMode, is_gemini_available
+from tts import (
+    generate_speech, get_voice_list, is_tts_available,
+    VOICES, DEFAULT_VOICE, SAMPLE_RATE
+)
 
 import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
-from pocket_tts import TTSModel
 from mutagen.id3 import ID3, TIT2, TALB, TPE1, TRCK, TCON, COMM, APIC
 import lameenc
 import numpy as np
 
 
-BUILTIN_VOICES = [
-    "alba", "marius", "javert", "jean",
-    "fantine", "cosette", "eponine", "azelma"
-]
+# Get voice names from TTS module
+BUILTIN_VOICES = list(VOICES.keys())
 
 
 @dataclass
@@ -319,7 +320,7 @@ def create_m4b_with_chapters(
     author: str,
     cover_image: bytes = None,
     cover_mime: str = None,
-) -> bool:
+) -> tuple[bool, str]:
     """
     Create an M4B audiobook file with embedded chapter markers.
 
@@ -333,10 +334,10 @@ def create_m4b_with_chapters(
         cover_mime: MIME type of cover image
 
     Returns:
-        True if successful, False otherwise
+        Tuple of (success, error_message). error_message is None on success.
     """
     if not is_ffmpeg_available():
-        return False
+        return (False, "ffmpeg not found")
 
     with tempfile.TemporaryDirectory(prefix="epub2mp3_m4b_") as temp_dir:
         temp_dir = Path(temp_dir)
@@ -363,7 +364,7 @@ def create_m4b_with_chapters(
             current_pos_ms = end_ms + 500
 
         if not all_audio:
-            return False
+            return (False, "No audio segments provided")
 
         # Concatenate all audio
         combined = np.concatenate(all_audio)
@@ -399,15 +400,14 @@ def create_m4b_with_chapters(
                 f.write(f"title={chapter_title}\n")
                 f.write("\n")
 
-        # Build ffmpeg command
+        # Build ffmpeg command - all inputs first, then output options
         cmd = [
             'ffmpeg', '-y',
             '-i', str(wav_path),
             '-i', str(metadata_path),
-            '-map_metadata', '1',
         ]
 
-        # Add cover image if available
+        # Add cover image input if available
         cover_path = None
         if cover_image and cover_mime:
             ext = 'jpg' if 'jpeg' in cover_mime else 'png'
@@ -415,6 +415,11 @@ def create_m4b_with_chapters(
             with open(cover_path, 'wb') as f:
                 f.write(cover_image)
             cmd.extend(['-i', str(cover_path)])
+
+        # Now add output options (after all inputs)
+        cmd.extend(['-map_metadata', '1'])
+
+        if cover_image and cover_mime:
             cmd.extend(['-map', '0:a', '-map', '2:v'])
             cmd.extend(['-disposition:v:0', 'attached_pic'])
         else:
@@ -426,8 +431,13 @@ def create_m4b_with_chapters(
             '-b:a', '128k',
             '-ar', str(sample_rate),
             '-ac', '1',
-            str(output_path)
         ])
+
+        # For cover art, copy the image as-is (don't re-encode to video)
+        if cover_image and cover_mime:
+            cmd.extend(['-c:v', 'copy'])
+
+        cmd.append(str(output_path))
 
         try:
             result = subprocess.run(
@@ -436,82 +446,22 @@ def create_m4b_with_chapters(
                 text=True,
                 timeout=600  # 10 minute timeout
             )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError):
-            return False
+            if result.returncode != 0:
+                return (False, f"ffmpeg error: {result.stderr}")
+            return (True, None)
+        except subprocess.TimeoutExpired:
+            return (False, "ffmpeg timed out after 10 minutes")
+        except subprocess.SubprocessError as e:
+            return (False, f"ffmpeg exception: {e}")
 
 
-def get_voice_state(model: TTSModel, voice: str):
-    """Get voice state for a given voice name or WAV path.
-
-    Predefined voices (alba, marius, etc.) are handled automatically by pocket_tts.
-    Custom WAV file paths are also supported for voice cloning.
+def text_to_audio(text: str, voice: str = DEFAULT_VOICE) -> tuple[np.ndarray, int]:
     """
-    return model.get_state_for_audio_prompt(voice)
+    Convert text to audio using Gemini TTS.
 
-
-def text_to_audio(
-    model: TTSModel,
-    voice_state,
-    text: str,
-    max_chunk_chars: int = 250
-) -> np.ndarray:
+    Returns tuple of (audio numpy array, sample rate).
     """
-    Convert text to audio using Pocket TTS.
-
-    Splits long text into chunks to avoid memory issues.
-    Returns numpy array of audio samples.
-    """
-    # Split text into sentences for chunking
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-    chunks = []
-    current_chunk = ""
-
-    for sentence in sentences:
-        # If a single sentence is too long, split it further
-        if len(sentence) > max_chunk_chars:
-            if current_chunk:
-                chunks.append(current_chunk.strip())
-                current_chunk = ""
-            # Split long sentence on commas or other punctuation
-            parts = re.split(r'(?<=[,;:])\s+', sentence)
-            for part in parts:
-                if len(part) > max_chunk_chars:
-                    # Last resort: split by words
-                    words = part.split()
-                    sub_chunk = ""
-                    for word in words:
-                        if len(sub_chunk) + len(word) + 1 < max_chunk_chars:
-                            sub_chunk += " " + word
-                        else:
-                            if sub_chunk:
-                                chunks.append(sub_chunk.strip())
-                            sub_chunk = word
-                    if sub_chunk:
-                        chunks.append(sub_chunk.strip())
-                else:
-                    chunks.append(part.strip())
-        elif len(current_chunk) + len(sentence) < max_chunk_chars:
-            current_chunk += " " + sentence
-        else:
-            if current_chunk:
-                chunks.append(current_chunk.strip())
-            current_chunk = sentence
-
-    if current_chunk:
-        chunks.append(current_chunk.strip())
-
-    # Generate audio for each chunk
-    audio_parts = []
-    for chunk in chunks:
-        if chunk:
-            audio = model.generate_audio(voice_state, chunk)
-            audio_parts.append(audio.numpy())
-
-    # Concatenate all audio parts
-    if audio_parts:
-        return np.concatenate(audio_parts)
-    return np.array([])
+    return generate_speech(text, voice)
 
 
 def convert_wav_to_mp3(wav_data: np.ndarray, sample_rate: int, output_path: str):
@@ -570,7 +520,7 @@ def add_id3_tags(
 
     # Add comment with voice info
     if voice:
-        tags["COMM"] = COMM(encoding=3, lang="eng", desc="Voice", text=f"Generated with Pocket TTS ({voice})")
+        tags["COMM"] = COMM(encoding=3, lang="eng", desc="Voice", text=f"Generated with Gemini TTS ({voice})")
 
     # Add cover art
     if cover_image and cover_mime:
@@ -588,33 +538,31 @@ def add_id3_tags(
 def convert_epub_to_mp3(
     epub_path: str,
     output_dir: str,
-    model: TTSModel,
-    voice: str = "alba",
+    voice: str = DEFAULT_VOICE,
     per_chapter: bool = True,
-    progress_callback: Callable[[int, int, str], None] = None,
+    progress_callback: Callable[[int, int, str, dict], None] = None,
     chapter_indices: list[int] = None,
     skip_existing: bool = False,
     announce_chapters: bool = False,
     output_format: str = "mp3",
     text_processing: str = "none",
-    llm_model: str = None,
 ) -> list[str]:
     """
-    Convert an EPUB file to audio files (MP3 or M4B).
+    Convert an EPUB file to audio files (MP3 or M4B) using Gemini TTS.
 
     Args:
         epub_path: Path to the EPUB file
         output_dir: Directory to save audio files
-        model: Loaded TTSModel instance
-        voice: Voice name or custom WAV path
+        voice: Gemini TTS voice name (default: Charon)
         per_chapter: If True, create one file per chapter; otherwise combine all
-        progress_callback: Function(current, total, message) for progress updates
+        progress_callback: Function(current, total, message, details) for progress updates
+            details dict can include: chapter_current, chapter_total, chapter_title,
+            stage, words_processed, words_total
         chapter_indices: List of chapter indices to convert (None = all)
         skip_existing: If True, skip chapters that already have output files
         announce_chapters: If True, speak chapter title at start of each chapter
         output_format: "mp3" or "m4b" (M4B requires ffmpeg, creates single file with chapters)
-        text_processing: "none", "clean", "speed", or "summary" (requires Ollama)
-        llm_model: Ollama model for text processing (default: gemma3:4b)
+        text_processing: "none", "clean", "speed", or "summary" (uses Gemini)
 
     Returns:
         List of paths to generated audio files
@@ -641,15 +589,15 @@ def convert_epub_to_mp3(
                                 ProcessingMode.SPEED_READ, ProcessingMode.SUMMARY):
         text_processing = ProcessingMode.NONE
 
-    # Check if LLM processing requested but Ollama not available
-    llm_available = is_ollama_available()
+    # Check if text processing requested but Gemini not configured
+    llm_available = is_gemini_available()
     if text_processing != ProcessingMode.NONE and not llm_available:
         if progress_callback:
-            progress_callback(0, 100, "Note: Ollama not available, using basic text cleaning")
+            progress_callback(0, 100, "Note: Gemini API not configured, using basic text cleaning", {"stage": "initializing"})
 
     # Parse EPUB
     if progress_callback:
-        progress_callback(0, 100, "Parsing EPUB...")
+        progress_callback(0, 100, "Parsing EPUB...", {"stage": "parsing"})
 
     book = parse_epub(epub_path)
 
@@ -668,12 +616,28 @@ def convert_epub_to_mp3(
     if not selected_chapters:
         raise ValueError("No chapters selected for conversion")
 
-    # Get voice state
-    if progress_callback:
-        progress_callback(5, 100, "Loading voice...")
+    # Calculate total words for progress tracking
+    total_words = sum(len(ch.text.split()) for ch in selected_chapters)
+    words_processed = 0
 
-    voice_state = get_voice_state(model, voice)
-    sample_rate = model.sample_rate
+    # Validate voice
+    if voice not in VOICES:
+        if progress_callback:
+            progress_callback(5, 100, f"Unknown voice '{voice}', using {DEFAULT_VOICE}", {
+                "stage": "initializing",
+                "chapter_total": len(selected_chapters),
+                "words_total": total_words
+            })
+        voice = DEFAULT_VOICE
+
+    if progress_callback:
+        progress_callback(5, 100, f"Using voice: {voice}...", {
+            "stage": "initializing",
+            "chapter_total": len(selected_chapters),
+            "words_total": total_words
+        })
+
+    sample_rate = SAMPLE_RATE
 
     output_files = []
     total_chapters = len(selected_chapters)
@@ -684,33 +648,54 @@ def convert_epub_to_mp3(
         for idx, chapter in enumerate(selected_chapters):
             title = chapter.title
             text = chapter.text
+            chapter_words = len(text.split())
             progress_pct = 10 + int((idx / total_chapters) * 85)
             safe_title = re.sub(r'[^\w\s-]', '', title)[:50]
             filename = f"{idx+1:03d}_{safe_title}.mp3"
             output_path = output_dir / filename
 
+            # Common details for this chapter
+            chapter_details = {
+                "chapter_current": idx + 1,
+                "chapter_total": total_chapters,
+                "chapter_title": title[:50],
+                "words_processed": words_processed,
+                "words_total": total_words,
+            }
+
             # Skip if file exists and skip_existing is enabled
             if skip_existing and output_path.exists() and output_path.stat().st_size > 0:
                 skipped_count += 1
+                words_processed += chapter_words
                 if progress_callback:
-                    progress_callback(progress_pct, 100, f"Skipping (exists): {title[:30]}...")
+                    progress_callback(progress_pct, 100, f"Skipping (exists): {title[:30]}...", {
+                        **chapter_details,
+                        "stage": "skipping",
+                        "words_processed": words_processed,
+                    })
                 output_files.append(str(output_path))
                 continue
 
             if progress_callback:
-                progress_callback(progress_pct, 100, f"Converting: {title[:30]}...")
+                progress_callback(progress_pct, 100, f"Converting: {title[:30]}...", {
+                    **chapter_details,
+                    "stage": "tts",
+                })
 
             # Process text if LLM processing enabled
             if text_processing != ProcessingMode.NONE:
                 if progress_callback:
-                    progress_callback(progress_pct, 100, f"Processing text: {title[:30]}...")
-                text = process_chapter(text, title, text_processing, model=llm_model)
+                    progress_callback(progress_pct, 100, f"Processing text: {title[:30]}...", {
+                        **chapter_details,
+                        "stage": "text_processing",
+                    })
+                text = process_chapter(text, title, text_processing)
 
             # Generate chapter announcement if enabled
             chapter_audio_parts = []
             if announce_chapters:
                 announcement_text = f"Chapter {idx + 1}. {title}."
-                announcement = text_to_audio(model, voice_state, announcement_text)
+                announcement, _ = text_to_audio(announcement_text, voice)
                 if len(announcement) > 0:
                     chapter_audio_parts.append(announcement)
                     # Add a brief pause after announcement
@@ -718,7 +703,7 @@ def convert_epub_to_mp3(
                     chapter_audio_parts.append(pause)
 
             # Generate chapter content audio
-            content_audio = text_to_audio(model, voice_state, text)
+            content_audio, _ = text_to_audio(text, voice)
             if len(content_audio) > 0:
                 chapter_audio_parts.append(content_audio)
 
@@ -742,11 +727,18 @@ def convert_epub_to_mp3(
                     cover_mime=book.cover_mime,
                 )
                 output_files.append(str(output_path))
+
+            # Update words processed after chapter completes
+            words_processed += chapter_words
     else:
         # Single combined file (MP3 or M4B)
         if progress_callback:
             format_name = "M4B audiobook" if output_format == "m4b" else "combined MP3"
-            progress_callback(10, 100, f"Creating {format_name}...")
+            progress_callback(10, 100, f"Creating {format_name}...", {
+                "stage": "tts",
+                "chapter_total": total_chapters,
+                "words_total": total_words,
+            })
 
         # For M4B, we need to track chapter segments separately
         chapter_segments = []  # (chapter_title, audio_data)
@@ -754,35 +746,55 @@ def convert_epub_to_mp3(
         for idx, chapter in enumerate(selected_chapters):
             title = chapter.title
             text = chapter.text
+            chapter_words = len(text.split())
             progress_pct = 10 + int((idx / total_chapters) * 80)
+
+            # Common details for this chapter
+            chapter_details = {
+                "chapter_current": idx + 1,
+                "chapter_total": total_chapters,
+                "chapter_title": title[:50],
+                "words_processed": words_processed,
+                "words_total": total_words,
+            }
+
             if progress_callback:
-                progress_callback(progress_pct, 100, f"Converting: {title[:30]}...")
+                progress_callback(progress_pct, 100, f"Converting: {title[:30]}...", {
+                    **chapter_details,
+                    "stage": "tts",
+                })
 
             # Process text if LLM processing enabled
             if text_processing != ProcessingMode.NONE:
                 if progress_callback:
-                    progress_callback(progress_pct, 100, f"Processing text: {title[:30]}...")
-                text = process_chapter(text, title, text_processing, model=llm_model)
+                    progress_callback(progress_pct, 100, f"Processing text: {title[:30]}...", {
+                        **chapter_details,
+                        "stage": "text_processing",
+                    })
+                text = process_chapter(text, title, text_processing)
 
             chapter_audio_parts = []
 
             # Generate chapter announcement if enabled
             if announce_chapters:
                 announcement_text = f"Chapter {idx + 1}. {title}."
-                announcement = text_to_audio(model, voice_state, announcement_text)
+                announcement, _ = text_to_audio(announcement_text, voice)
                 if len(announcement) > 0:
                     chapter_audio_parts.append(announcement)
                     # Add a brief pause after announcement
                     pause = np.zeros(int(sample_rate * 0.8), dtype=announcement.dtype)
                     chapter_audio_parts.append(pause)
 
-            content_audio = text_to_audio(model, voice_state, text)
+            content_audio, _ = text_to_audio(text, voice)
             if len(content_audio) > 0:
                 chapter_audio_parts.append(content_audio)
 
             if chapter_audio_parts:
                 chapter_audio = np.concatenate(chapter_audio_parts)
                 chapter_segments.append((title, chapter_audio))
+
+            # Update words processed after chapter completes
+            words_processed += chapter_words
 
         if chapter_segments:
             # Sanitize filename
@@ -795,9 +807,15 @@ def convert_epub_to_mp3(
                 output_path = output_dir / f"{safe_title}.m4b"
 
                 if progress_callback:
-                    progress_callback(95, 100, "Creating M4B with chapters...")
+                    progress_callback(95, 100, "Creating M4B with chapters...", {
+                        "stage": "encoding",
+                        "chapter_current": total_chapters,
+                        "chapter_total": total_chapters,
+                        "words_processed": total_words,
+                        "words_total": total_words,
+                    })
 
-                success = create_m4b_with_chapters(
+                success, error_msg = create_m4b_with_chapters(
                     audio_segments=chapter_segments,
                     output_path=str(output_path),
                     sample_rate=sample_rate,
@@ -808,7 +826,7 @@ def convert_epub_to_mp3(
                 )
 
                 if not success:
-                    raise ValueError("Failed to create M4B file (ffmpeg error)")
+                    raise ValueError(f"Failed to create M4B file: {error_msg}")
 
                 output_files.append(str(output_path))
             else:
@@ -824,7 +842,13 @@ def convert_epub_to_mp3(
                 output_path = output_dir / f"{safe_title}.mp3"
 
                 if progress_callback:
-                    progress_callback(95, 100, "Saving MP3...")
+                    progress_callback(95, 100, "Saving MP3...", {
+                        "stage": "encoding",
+                        "chapter_current": total_chapters,
+                        "chapter_total": total_chapters,
+                        "words_processed": total_words,
+                        "words_total": total_words,
+                    })
 
                 convert_wav_to_mp3(combined_audio, sample_rate, str(output_path))
                 add_id3_tags(
@@ -839,9 +863,16 @@ def convert_epub_to_mp3(
                 output_files.append(str(output_path))
 
     if progress_callback:
+        final_details = {
+            "stage": "complete",
+            "chapter_current": total_chapters,
+            "chapter_total": total_chapters,
+            "words_processed": total_words,
+            "words_total": total_words,
+        }
         if per_chapter and skip_existing and skipped_count > 0:
-            progress_callback(100, 100, f"Done! ({skipped_count} chapters skipped)")
+            progress_callback(100, 100, f"Done! ({skipped_count} chapters skipped)", final_details)
         else:
-            progress_callback(100, 100, "Done!")
+            progress_callback(100, 100, "Done!", final_details)
 
     return output_files
