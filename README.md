@@ -4,6 +4,8 @@ Convert any EPUB into a high-quality audiobook using AI-powered text-to-speech.
 
 Uses [Pocket TTS](https://kyutai.org/blog/2026-01-13-pocket-tts) for local speech synthesis and [Gemini](https://ai.google.dev/) for intelligent text processing.
 
+![Inkvoice UI](docs/screenshots/inkvoice-ui.png)
+
 ## Features
 
 - **Web interface** - Clean, modern UI with drag-and-drop
