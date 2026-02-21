@@ -32,6 +32,10 @@ uploads: dict = {}
 # Store for conversion jobs
 jobs: dict = {}
 
+# Persistent output directory — survives server restarts
+OUTPUT_DIR = Path.home() / "epub2mp3_output"
+JOBS_MANIFEST = OUTPUT_DIR / "jobs.json"
+
 # Load TTS model at startup
 if is_tts_available():
     load_model()
@@ -108,6 +112,62 @@ async def cleanup_loop():
             print(f"[cleanup] Error during periodic cleanup: {exc}")
 
 
+def _save_jobs_manifest():
+    """Write all completed jobs to ~/epub2mp3_output/jobs.json."""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for job_id, job in jobs.items():
+        if job.get("status") not in ("complete", "error"):
+            continue
+        output_dir = job.get("output_dir")
+        if output_dir is None:
+            continue
+        entries.append({
+            "job_id": job_id,
+            "status": job["status"],
+            "progress": job.get("progress", 100),
+            "message": job.get("message", ""),
+            "files": job.get("files", []),
+            "completed_at": job.get("completed_at"),
+            "output_dir": str(output_dir),
+            "title": job.get("title", ""),
+            "author": job.get("author", ""),
+        })
+    JOBS_MANIFEST.write_text(json.dumps(entries, indent=2))
+
+
+def _load_persisted_jobs():
+    """Restore completed jobs from ~/epub2mp3_output/jobs.json on startup."""
+    if not JOBS_MANIFEST.exists():
+        return
+    try:
+        data = json.loads(JOBS_MANIFEST.read_text())
+        loaded = 0
+        for entry in data:
+            job_id = entry.get("job_id")
+            if not job_id or job_id in jobs:
+                continue
+            output_dir = Path(entry["output_dir"])
+            if not output_dir.exists():
+                continue  # Files gone, skip
+            jobs[job_id] = {
+                "status": entry["status"],
+                "progress": entry.get("progress", 100),
+                "message": entry.get("message", ""),
+                "files": entry.get("files", []),
+                "completed_at": entry.get("completed_at"),
+                "output_dir": output_dir,
+                "job_dir": None,  # No temp dir for persisted jobs
+                "title": entry.get("title", ""),
+                "author": entry.get("author", ""),
+            }
+            loaded += 1
+        if loaded:
+            print(f"[persist] Restored {loaded} completed jobs from disk")
+    except Exception as e:
+        print(f"[persist] Failed to load jobs manifest: {e}")
+
+
 app = FastAPI(title="Inkvoice")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
@@ -115,6 +175,9 @@ app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), na
 @app.on_event("startup")
 async def startup_event():
     """Run one-time stale dir cleanup and start the background cleanup loop."""
+    # Restore persisted completed jobs
+    _load_persisted_jobs()
+
     # One-time cleanup of crash leftovers
     dirs_removed = _cleanup_orphaned_tmp_dirs(max_age_seconds=ORPHAN_TTL_SECONDS)
     if dirs_removed:
@@ -211,6 +274,26 @@ async def get_capabilities():
             {"value": "summary", "label": "Summary", "description": "~10% brief summary"},
         ],
     }
+
+
+@app.get("/api/jobs")
+async def list_jobs():
+    """Return all completed jobs (persisted across restarts)."""
+    result = []
+    for job_id, job in jobs.items():
+        if job.get("status") not in ("complete", "error"):
+            continue
+        result.append({
+            "job_id": job_id,
+            "status": job["status"],
+            "files": job.get("files", []),
+            "completed_at": job.get("completed_at"),
+            "title": job.get("title", ""),
+            "author": job.get("author", ""),
+            "message": job.get("message", ""),
+        })
+    result.sort(key=lambda j: j.get("completed_at") or 0, reverse=True)
+    return {"jobs": result}
 
 
 @app.get("/api/stats")
@@ -464,6 +547,23 @@ async def run_conversion(
         job["progress"] = 100
         job["message"] = "Conversion complete!"
 
+        # Copy output files to persistent directory so they survive restarts
+        persistent_dir = OUTPUT_DIR / job_id
+        persistent_dir.mkdir(parents=True, exist_ok=True)
+        for filename in job["files"]:
+            src = Path(job["output_dir"]) / filename
+            if src.exists():
+                shutil.copy2(src, persistent_dir / filename)
+        job["output_dir"] = persistent_dir
+
+        # Clean up temp working dir (EPUB + intermediate files) to free space
+        temp_job_dir = job.get("job_dir")
+        if temp_job_dir and Path(str(temp_job_dir)).exists():
+            shutil.rmtree(temp_job_dir, ignore_errors=True)
+        job["job_dir"] = None
+
+        _save_jobs_manifest()
+
     except asyncio.CancelledError:
         job["status"] = "cancelled"
         job["message"] = "Cancelled"
@@ -615,8 +715,9 @@ async def download_all(job_id: str):
     if job["status"] != "complete":
         raise HTTPException(status_code=400, detail="Job not complete")
 
-    # Create ZIP file
-    zip_path = job["job_dir"] / "audiobook.zip"
+    # Create ZIP file (use persistent dir if temp dir was already cleaned up)
+    zip_dir = job.get("job_dir") or job.get("output_dir") or OUTPUT_DIR / job_id
+    zip_path = Path(str(zip_dir)) / "audiobook.zip"
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
         for filename in job["files"]:
             file_path = job["output_dir"] / filename

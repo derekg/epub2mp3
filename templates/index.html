@@ -12,7 +12,6 @@
         :root {
             --bg: #fafafa;
             --surface: #ffffff;
-            --surface-raised: #ffffff;
             --border: #e5e5e5;
             --border-subtle: #f0f0f0;
             --text: #171717;
@@ -35,11 +34,11 @@
             line-height: 1.6;
         }
 
-        /* Layout: two-column when jobs panel is visible */
+        /* ── Layout ──────────────────────────────────────────── */
+
         .page-layout {
             display: flex;
             align-items: flex-start;
-            gap: 0;
             min-height: 100vh;
         }
 
@@ -54,21 +53,20 @@
             padding: 48px 24px;
         }
 
-        /* Jobs sidebar */
+        /* ── Jobs sidebar ─────────────────────────────────────── */
+
         .jobs-sidebar {
-            width: 360px;
+            width: 340px;
             flex-shrink: 0;
             padding: 48px 24px 48px 0;
-            display: none; /* hidden until first job */
+            display: none;
             position: sticky;
             top: 0;
             max-height: 100vh;
             overflow-y: auto;
         }
 
-        .jobs-sidebar.visible {
-            display: block;
-        }
+        .jobs-sidebar.visible { display: block; }
 
         .jobs-sidebar-inner {
             background: var(--surface);
@@ -78,7 +76,7 @@
         }
 
         .jobs-sidebar-header {
-            padding: 18px 20px;
+            padding: 16px 20px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
@@ -86,10 +84,10 @@
         }
 
         .jobs-sidebar-title {
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.06em;
             color: var(--text);
         }
 
@@ -98,24 +96,24 @@
             border: 1px solid var(--border);
             border-radius: 10px;
             padding: 2px 8px;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 600;
             color: var(--text-muted);
         }
 
-        .jobs-list {
-            padding: 0;
-        }
+        /* ── Job cards ────────────────────────────────────────── */
 
-        /* Individual job card in the sidebar */
         .job-card {
             padding: 16px 20px;
             border-bottom: 1px solid var(--border-subtle);
-            transition: background 0.15s;
+            animation: slideInRight 0.25s ease;
         }
 
-        .job-card:last-child {
-            border-bottom: none;
+        .job-card:last-child { border-bottom: none; }
+
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(12px); }
+            to   { opacity: 1; transform: translateX(0); }
         }
 
         .job-card-header {
@@ -131,24 +129,21 @@
             border-radius: 50%;
             flex-shrink: 0;
             margin-top: 5px;
+            transition: background 0.3s;
         }
 
         .job-status-dot.processing {
             background: var(--warning);
-            animation: pulse 1.5s ease-in-out infinite;
+            animation: dotPulse 1.5s ease-in-out infinite;
         }
 
-        .job-status-dot.complete {
-            background: var(--success);
-        }
+        .job-status-dot.complete  { background: var(--success); }
+        .job-status-dot.error     { background: var(--error); }
+        .job-status-dot.cancelled { background: var(--text-muted); }
 
-        .job-status-dot.error {
-            background: var(--error);
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
+        @keyframes dotPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50%       { opacity: 0.4; transform: scale(0.85); }
         }
 
         .job-card-info {
@@ -157,17 +152,16 @@
         }
 
         .job-card-title {
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             font-weight: 500;
             color: var(--text);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            line-height: 1.4;
         }
 
         .job-card-status {
-            font-size: 0.78rem;
+            font-size: 0.76rem;
             color: var(--text-muted);
             margin-top: 2px;
             white-space: nowrap;
@@ -175,11 +169,15 @@
             text-overflow: ellipsis;
         }
 
-        .job-card-status.error-text {
-            color: var(--error);
+        .job-card-status.error-text { color: var(--error); }
+
+        .job-pct {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            flex-shrink: 0;
+            margin-left: 4px;
         }
 
-        /* Progress bar inside job card */
         .job-progress-bar {
             height: 3px;
             background: var(--border);
@@ -192,35 +190,25 @@
             height: 100%;
             background: var(--accent);
             width: 0%;
-            transition: width 0.3s ease;
+            transition: width 0.4s ease;
         }
 
-        .job-progress-fill.complete {
-            background: var(--success);
-        }
+        .job-progress-fill.complete { background: var(--success); }
+        .job-progress-fill.error    { background: var(--error); }
 
-        .job-progress-fill.error {
-            background: var(--error);
-        }
-
-        /* Download links in job card */
-        .job-downloads {
-            display: none;
-        }
-
-        .job-downloads.visible {
-            display: block;
-        }
+        /* Downloads inside job card */
+        .job-downloads { display: none; }
+        .job-downloads.visible { display: block; }
 
         .job-download-links {
             display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-bottom: 6px;
+            flex-direction: column;
+            gap: 5px;
+            margin-bottom: 5px;
         }
 
         .job-download-link {
-            font-size: 0.78rem;
+            font-size: 0.76rem;
             color: var(--accent);
             text-decoration: none;
             font-weight: 500;
@@ -233,15 +221,13 @@
             text-overflow: ellipsis;
             max-width: 100%;
             display: block;
+            transition: border-color 0.15s;
         }
 
-        .job-download-link:hover {
-            border-color: var(--text-muted);
-            text-decoration: none;
-        }
+        .job-download-link:hover { border-color: var(--text-muted); }
 
         .job-download-all-link {
-            font-size: 0.78rem;
+            font-size: 0.76rem;
             color: var(--text-secondary);
             text-decoration: none;
             font-weight: 500;
@@ -254,20 +240,48 @@
 
         .job-error-msg {
             display: none;
-            font-size: 0.78rem;
+            font-size: 0.76rem;
             color: var(--error);
             margin-top: 4px;
             line-height: 1.4;
         }
 
-        .job-error-msg.visible {
-            display: block;
+        .job-error-msg.visible { display: block; }
+
+        /* Cancel button inside job card */
+        .job-cancel-btn {
+            display: none;
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            color: var(--text-secondary);
+            font-size: 0.74rem;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 4px 10px;
+            margin-top: 8px;
+            width: 100%;
+            transition: border-color 0.15s, color 0.15s;
         }
 
-        /* Header */
+        .job-cancel-btn.visible { display: block; }
+
+        .job-cancel-btn:hover:not(:disabled) {
+            border-color: var(--error);
+            color: var(--error);
+        }
+
+        .job-cancel-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* ── Header ───────────────────────────────────────────── */
+
         header {
             text-align: center;
             margin-bottom: 48px;
+            animation: fadeSlideUp 0.4s ease;
         }
 
         .logo {
@@ -276,29 +290,35 @@
             font-weight: 600;
             letter-spacing: -0.03em;
             color: var(--text);
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .intro {
-            max-width: 420px;
+            max-width: 400px;
             margin: 0 auto;
             color: var(--text-secondary);
-            font-size: 1rem;
+            font-size: 0.97rem;
             line-height: 1.7;
         }
 
-        .intro strong {
-            color: var(--text);
-            font-weight: 500;
-        }
+        /* ── Cards ────────────────────────────────────────────── */
 
-        /* Cards */
         .card {
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 12px;
-            padding: 32px;
-            margin-bottom: 24px;
+            padding: 28px 28px;
+            margin-bottom: 20px;
+            animation: fadeSlideUp 0.35s ease both;
+        }
+
+        .card:nth-child(2) { animation-delay: 0.05s; }
+        .card:nth-child(3) { animation-delay: 0.10s; }
+        .card:nth-child(4) { animation-delay: 0.15s; }
+
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
 
         .card-header {
@@ -309,34 +329,36 @@
         }
 
         .card-number {
-            width: 28px;
-            height: 28px;
+            width: 26px;
+            height: 26px;
             border-radius: 50%;
             background: var(--text);
             color: var(--surface);
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             font-weight: 600;
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
         }
 
         .card-title {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             color: var(--text);
         }
 
-        /* Drop zone */
+        /* ── Drop zone ────────────────────────────────────────── */
+
         .drop-zone {
             border: 2px dashed var(--border);
             border-radius: 8px;
-            padding: 48px 24px;
+            padding: 44px 24px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: border-color 0.2s, background 0.2s;
             background: var(--bg);
         }
 
@@ -357,9 +379,9 @@
         }
 
         .drop-zone-icon {
-            width: 48px;
-            height: 48px;
-            margin: 0 auto 16px;
+            width: 44px;
+            height: 44px;
+            margin: 0 auto 14px;
             color: var(--text-muted);
         }
 
@@ -371,85 +393,78 @@
         .drop-zone-hint {
             color: var(--text-muted);
             font-size: 0.8rem;
-            margin-top: 8px;
+            margin-top: 6px;
         }
 
         .file-input { display: none; }
 
-        /* Book info */
+        /* ── Book info ────────────────────────────────────────── */
+
         .book-info {
             display: none;
-            padding: 20px 24px;
+            padding: 18px 20px;
             background: var(--bg);
             border-radius: 8px;
-            margin-top: 20px;
+            margin-top: 18px;
+            animation: fadeSlideUp 0.3s ease;
         }
 
-        .book-info.has-cover {
-            display: flex;
-            gap: 20px;
-            align-items: flex-start;
-        }
-
-        .book-info.no-cover {
-            display: block;
-        }
+        .book-info.has-cover { display: flex; gap: 18px; align-items: flex-start; }
+        .book-info.no-cover  { display: block; }
 
         .book-cover {
-            width: 80px;
+            width: 72px;
             height: auto;
             border-radius: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
             flex-shrink: 0;
         }
 
-        .book-cover:not([src]), .book-cover[src=""] {
-            display: none;
-        }
+        .book-cover:not([src]), .book-cover[src=""] { display: none; }
 
-        .book-details {
-            flex: 1;
-            min-width: 0;
-        }
+        .book-details { flex: 1; min-width: 0; }
 
         .book-title {
             font-family: 'Crimson Pro', Georgia, serif;
-            font-size: 1.25rem;
+            font-size: 1.2rem;
             font-weight: 500;
-            margin-bottom: 4px;
+            margin-bottom: 3px;
             line-height: 1.3;
         }
 
         .book-author {
             color: var(--text-secondary);
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             font-style: italic;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         .book-stats {
             color: var(--text-muted);
-            font-size: 0.8rem;
+            font-size: 0.78rem;
         }
 
-        /* Chapter list */
+        /* ── Chapter list ─────────────────────────────────────── */
+
         .chapters-card { display: none; }
 
         .chapter-controls {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         .chapter-info {
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             color: var(--text-muted);
         }
 
         .chapter-actions {
             display: flex;
-            gap: 16px;
+            gap: 14px;
         }
 
         .chapter-actions button {
@@ -457,19 +472,17 @@
             border: none;
             color: var(--text-secondary);
             cursor: pointer;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             font-weight: 500;
             padding: 0;
             text-decoration: underline;
             text-underline-offset: 2px;
         }
 
-        .chapter-actions button:hover {
-            color: var(--text);
-        }
+        .chapter-actions button:hover { color: var(--text); }
 
         .chapter-list {
-            max-height: 300px;
+            max-height: 280px;
             overflow-y: auto;
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -478,41 +491,43 @@
         .chapter-item {
             display: flex;
             align-items: center;
-            padding: 14px 16px;
+            padding: 12px 14px;
             border-bottom: 1px solid var(--border-subtle);
             cursor: pointer;
-            transition: background 0.15s;
+            transition: background 0.12s;
         }
 
         .chapter-item:last-child { border-bottom: none; }
         .chapter-item:hover { background: var(--bg); }
 
         .chapter-item input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            margin-right: 14px;
+            width: 16px;
+            height: 16px;
+            margin-right: 12px;
             accent-color: var(--accent);
+            flex-shrink: 0;
         }
 
         .chapter-item .title {
             flex: 1;
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
         .chapter-item .meta {
-            font-size: 0.8rem;
+            font-size: 0.76rem;
             color: var(--text-muted);
-            margin-left: 12px;
+            margin-left: 10px;
+            white-space: nowrap;
         }
 
         .badge {
-            font-size: 0.65rem;
-            padding: 2px 6px;
-            border-radius: 4px;
-            margin-left: 8px;
+            font-size: 0.62rem;
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: 6px;
             text-transform: uppercase;
             font-weight: 600;
             letter-spacing: 0.02em;
@@ -521,68 +536,60 @@
             border: 1px solid var(--border);
         }
 
-        /* Duration estimate */
+        /* Duration estimate banner */
         .duration-estimate {
             display: none;
-            margin-top: 16px;
-            padding: 14px 16px;
+            margin-top: 14px;
+            padding: 12px 14px;
             background: var(--bg);
             border-radius: 8px;
             justify-content: space-between;
             align-items: center;
+            animation: fadeSlideUp 0.25s ease;
         }
 
         .duration-estimate-label {
-            font-size: 0.85rem;
+            font-size: 0.83rem;
             color: var(--text-secondary);
         }
 
+        .duration-estimate-right { text-align: right; }
+
         .duration-estimate-value {
-            font-size: 0.95rem;
+            font-size: 0.93rem;
             font-weight: 600;
             color: var(--text);
         }
 
         .duration-estimate-note {
-            font-size: 0.75rem;
+            font-size: 0.73rem;
             color: var(--text-muted);
-            margin-top: 2px;
-            text-align: right;
+            margin-top: 1px;
         }
 
-        .duration-estimate-right {
-            text-align: right;
-        }
+        /* ── Options ──────────────────────────────────────────── */
 
-        /* Options */
         .options-card { display: none; }
 
         .option-group {
-            margin-bottom: 24px;
+            margin-bottom: 22px;
         }
 
-        .option-group:last-child {
-            margin-bottom: 0;
-        }
+        .option-group:last-child { margin-bottom: 0; }
 
         .option-group-title {
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.06em;
             color: var(--text-muted);
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .option-row {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        .option-row:last-child {
-            margin-bottom: 0;
+            gap: 10px;
         }
 
         select {
@@ -592,20 +599,17 @@
             border: 1px solid var(--border);
             border-radius: 6px;
             color: var(--text);
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             cursor: pointer;
+            transition: border-color 0.15s;
+            min-width: 0;
         }
 
-        select:hover { border-color: var(--text-muted); }
-        select:focus { outline: none; border-color: var(--accent); }
+        select:hover  { border-color: var(--text-muted); }
+        select:focus  { outline: none; border-color: var(--accent); }
 
-        .voice-row {
-            display: flex;
-            gap: 8px;
-            flex: 1;
-        }
-
-        .voice-row select { flex: 1; }
+        .voice-row { display: flex; gap: 8px; flex: 1; min-width: 0; }
+        .voice-row select { flex: 1; min-width: 0; }
 
         .preview-btn {
             width: 40px;
@@ -618,87 +622,29 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s;
             flex-shrink: 0;
+            transition: all 0.18s;
         }
 
-        .preview-btn:hover {
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-
-        .preview-btn.playing {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: var(--surface);
-        }
-
-        .checkbox-option {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            cursor: pointer;
-            padding: 8px 0;
-        }
-
-        .checkbox-option input {
-            width: 18px;
-            height: 18px;
-            accent-color: var(--accent);
-            margin-top: 1px;
-        }
-
-        .checkbox-label {
-            flex: 1;
-        }
-
-        .checkbox-label-text {
-            font-size: 0.9rem;
-            color: var(--text);
-        }
-
-        .checkbox-label-hint {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            margin-top: 2px;
-        }
-
-        .processing-note {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            margin-top: 8px;
-            padding: 8px 12px;
-            background: var(--bg);
-            border-radius: 6px;
-        }
-
-        .processing-note.ready {
-            color: var(--text-secondary);
-        }
-
-        .processing-note.warning {
-            color: var(--text-secondary);
-        }
-
+        .preview-btn:hover  { border-color: var(--accent); color: var(--accent); }
+        .preview-btn.playing { background: var(--accent); border-color: var(--accent); color: var(--surface); }
 
         /* Speed segmented control */
         .speed-control {
             display: flex;
-            gap: 0;
             border: 1px solid var(--border);
             border-radius: 8px;
             overflow: hidden;
+            flex: 1;
         }
 
-        .speed-control input[type="radio"] {
-            display: none;
-        }
+        .speed-control input[type="radio"] { display: none; }
 
         .speed-control label {
             flex: 1;
             text-align: center;
-            padding: 8px 4px;
-            font-size: 0.82rem;
+            padding: 9px 4px;
+            font-size: 0.8rem;
             font-weight: 500;
             color: var(--text-secondary);
             background: var(--surface);
@@ -708,37 +654,87 @@
             user-select: none;
         }
 
-        .speed-control label:last-of-type {
-            border-right: none;
-        }
+        .speed-control label:last-of-type { border-right: none; }
 
         .speed-control input[type="radio"]:checked + label {
             background: var(--accent);
             color: var(--surface);
         }
 
-        .speed-control label:hover:not(.speed-control input[type="radio"]:checked + label) {
+        .speed-control label:hover {
             background: var(--bg);
             color: var(--text);
         }
 
-        /* Buttons */
+        .speed-control input[type="radio"]:checked + label:hover {
+            background: var(--accent);
+            color: var(--surface);
+        }
+
+        /* Checkboxes */
+        .checkbox-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            cursor: pointer;
+            padding: 7px 0;
+        }
+
+        .checkbox-option input {
+            width: 17px;
+            height: 17px;
+            accent-color: var(--accent);
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .checkbox-label { flex: 1; }
+
+        .checkbox-label-text {
+            font-size: 0.88rem;
+            color: var(--text);
+        }
+
+        .checkbox-label-hint {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+
+        .processing-note {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 7px;
+            padding: 7px 10px;
+            background: var(--bg);
+            border-radius: 5px;
+        }
+
+        .processing-note.ready   { color: var(--text-secondary); }
+        .processing-note.warning { color: var(--text-secondary); }
+
+        /* ── Convert button ───────────────────────────────────── */
+
         .convert-btn {
             width: 100%;
-            padding: 16px 24px;
+            padding: 15px 24px;
             background: var(--accent);
             color: var(--surface);
             border: none;
             border-radius: 8px;
-            font-size: 1rem;
+            font-size: 0.97rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: background 0.18s, transform 0.1s;
             margin-top: 24px;
         }
 
         .convert-btn:hover:not(:disabled) {
             background: var(--accent-hover);
+        }
+
+        .convert-btn:active:not(:disabled) {
+            transform: scale(0.98);
         }
 
         .convert-btn:disabled {
@@ -747,12 +743,14 @@
             cursor: not-allowed;
         }
 
-        /* Progress */
+        /* ── Progress section ─────────────────────────────────── */
+
         .progress-section {
             display: none;
-            margin-top: 32px;
-            padding-top: 32px;
+            margin-top: 28px;
+            padding-top: 28px;
             border-top: 1px solid var(--border);
+            animation: fadeSlideUp 0.3s ease;
         }
 
         .progress-bar {
@@ -766,97 +764,80 @@
             height: 100%;
             background: var(--accent);
             width: 0%;
-            transition: width 0.3s ease;
+            transition: width 0.4s ease;
         }
 
         .progress-info {
             display: flex;
             justify-content: space-between;
-            margin-top: 16px;
-            font-size: 0.85rem;
+            margin-top: 14px;
+            font-size: 0.84rem;
         }
 
-        .progress-status {
-            color: var(--text);
-            font-weight: 500;
-        }
-
-        .progress-percent {
-            color: var(--text-muted);
-        }
+        .progress-status { color: var(--text); font-weight: 500; }
+        .progress-percent { color: var(--text-muted); }
 
         .progress-details {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-            margin-top: 20px;
-            padding: 16px;
+            gap: 12px;
+            margin-top: 18px;
+            padding: 14px;
             background: var(--bg);
             border-radius: 8px;
         }
 
-        .progress-detail {
-            text-align: center;
-        }
+        .progress-detail { text-align: center; }
 
         .progress-detail-value {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             font-weight: 600;
             color: var(--text);
         }
 
         .progress-detail-label {
-            font-size: 0.7rem;
+            font-size: 0.67rem;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            margin-top: 4px;
+            margin-top: 3px;
         }
 
-                .cancel-btn {
-            display: none;
-            margin-top: 20px;
-            width: 100%;
-            padding: 10px 20px;
-            background: transparent;
-            color: var(--text-secondary);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 0.9rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
+        /* ── Error ────────────────────────────────────────────── */
 
-        .cancel-btn:hover:not(:disabled) {
-            border-color: var(--error);
+        .error {
             color: var(--error);
+            font-size: 0.88rem;
+            margin-top: 14px;
+            padding: 11px 14px;
+            background: #fef2f2;
+            border-radius: 7px;
+            display: none;
+            animation: fadeSlideUp 0.2s ease;
         }
 
-        .cancel-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        .error:not(:empty) { display: block; }
 
-        /* Downloads */
+        /* ── Downloads section ────────────────────────────────── */
+
         .downloads-section {
             display: none;
-            margin-top: 32px;
-            padding-top: 32px;
+            margin-top: 28px;
+            padding-top: 28px;
             border-top: 1px solid var(--border);
+            animation: fadeSlideUp 0.3s ease;
         }
 
         .downloads-header {
             display: flex;
             align-items: center;
             gap: 8px;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
         }
 
         .downloads-header h3 {
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             font-weight: 600;
-            color: var(--text);
         }
 
         .success-dot {
@@ -864,21 +845,26 @@
             height: 8px;
             background: var(--success);
             border-radius: 50%;
+            animation: successPop 0.4s ease;
         }
 
-        .download-list {
-            list-style: none;
+        @keyframes successPop {
+            0%   { transform: scale(0); }
+            60%  { transform: scale(1.3); }
+            100% { transform: scale(1); }
         }
+
+        .download-list { list-style: none; }
 
         .download-list li {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 16px;
+            padding: 11px 14px;
             background: var(--bg);
             border-radius: 6px;
-            margin-bottom: 8px;
-            font-size: 0.9rem;
+            margin-bottom: 7px;
+            font-size: 0.88rem;
         }
 
         .download-list a {
@@ -887,22 +873,20 @@
             font-weight: 500;
         }
 
-        .download-list a:hover {
-            text-decoration: underline;
-        }
+        .download-list a:hover { text-decoration: underline; }
 
         .download-all-btn {
             width: 100%;
-            padding: 12px 16px;
+            padding: 11px 14px;
             background: transparent;
             color: var(--text);
             border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 0.9rem;
+            border-radius: 7px;
+            font-size: 0.88rem;
             font-weight: 500;
             cursor: pointer;
-            margin-top: 12px;
-            transition: all 0.2s;
+            margin-top: 10px;
+            transition: background 0.15s, border-color 0.15s;
         }
 
         .download-all-btn:hover {
@@ -910,56 +894,31 @@
             border-color: var(--text-muted);
         }
 
-        /* Inline error below convert button */
-        .error {
-            color: var(--error);
-            font-size: 0.9rem;
-            margin-top: 16px;
-            padding: 12px 16px;
-            background: #fef2f2;
-            border-radius: 8px;
+        /* ── Bitrate note ─────────────────────────────────────── */
+
+        #bitrateNote {
             display: none;
         }
 
-        .error:not(:empty) {
-            display: block;
-        }
+        /* ── History section ──────────────────────────────────── */
 
-        /* Footer */
-        footer {
-            text-align: center;
-            padding: 32px 24px;
-            color: var(--text-muted);
-            font-size: 0.8rem;
-        }
-
-        footer a {
-            color: var(--text-secondary);
-            text-decoration: none;
-        }
-
-        footer a:hover {
-            text-decoration: underline;
-        }
-
-
-        /* History */
         .history-section {
-            margin-top: 48px;
+            margin-top: 44px;
+            animation: fadeSlideUp 0.35s ease;
         }
 
         .history-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
         }
 
         .history-title {
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.06em;
             color: var(--text-muted);
         }
 
@@ -968,38 +927,35 @@
             border: none;
             color: var(--text-muted);
             cursor: pointer;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             padding: 0;
             text-decoration: underline;
             text-underline-offset: 2px;
         }
 
-        .history-clear-btn:hover {
-            color: var(--error);
-        }
+        .history-clear-btn:hover { color: var(--error); }
 
         .history-entry {
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 10px;
-            padding: 20px 24px;
-            margin-bottom: 12px;
+            padding: 18px 22px;
+            margin-bottom: 10px;
+            animation: fadeSlideUp 0.3s ease;
         }
 
-        .history-entry-header {
-            margin-bottom: 12px;
-        }
+        .history-entry-header { margin-bottom: 10px; }
 
         .history-entry-title {
             font-family: 'Crimson Pro', Georgia, serif;
-            font-size: 1.1rem;
+            font-size: 1.08rem;
             font-weight: 500;
             color: var(--text);
             line-height: 1.3;
         }
 
         .history-entry-meta {
-            font-size: 0.8rem;
+            font-size: 0.77rem;
             color: var(--text-muted);
             margin-top: 2px;
         }
@@ -1007,21 +963,21 @@
         .history-entry-files {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 7px;
         }
 
         .history-file-link {
             display: inline-flex;
             align-items: center;
             gap: 5px;
-            font-size: 0.82rem;
+            font-size: 0.79rem;
             color: var(--accent);
             text-decoration: none;
             padding: 4px 10px;
             border: 1px solid var(--border);
             border-radius: 5px;
             background: var(--bg);
-            transition: all 0.15s;
+            transition: border-color 0.15s, background 0.15s;
         }
 
         .history-file-link:hover {
@@ -1030,7 +986,7 @@
         }
 
         .history-file-expired {
-            font-size: 0.82rem;
+            font-size: 0.79rem;
             color: var(--text-muted);
             padding: 4px 10px;
             border: 1px solid var(--border-subtle);
@@ -1047,7 +1003,7 @@
         }
 
         .expired-badge {
-            font-size: 0.65rem;
+            font-size: 0.62rem;
             padding: 1px 5px;
             border-radius: 3px;
             background: var(--border);
@@ -1057,14 +1013,22 @@
             letter-spacing: 0.04em;
         }
 
-        /* Mobile */
+        /* ── Footer ───────────────────────────────────────────── */
 
+        footer {
+            text-align: center;
+            padding: 32px 24px;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+        }
 
-        /* Mobile: stack layout vertically */
+        footer a { color: var(--text-secondary); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
+        /* ── Responsive ───────────────────────────────────────── */
+
         @media (max-width: 900px) {
-            .page-layout {
-                flex-direction: column;
-            }
+            .page-layout { flex-direction: column; }
 
             .jobs-sidebar {
                 width: 100%;
@@ -1074,23 +1038,40 @@
                 overflow-y: visible;
             }
 
-            .jobs-sidebar.visible {
-                display: block;
-            }
+            .jobs-sidebar-inner { border-radius: 12px; }
         }
 
-        @media (max-width: 480px) {
-            .container { padding: 32px 16px; }
-            .card { padding: 24px 20px; }
+        @media (max-width: 600px) {
+            .container { padding: 28px 16px; }
+            .card { padding: 22px 18px; }
             .logo { font-size: 2rem; }
+
+            .progress-details {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+
+            .speed-control label { font-size: 0.74rem; padding: 9px 2px; }
+
+            select { font-size: 0.84rem; }
+        }
+
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
         }
     </style>
 </head>
 <body>
     <div class="page-layout">
-        <!-- Main form column -->
+
+        <!-- ── Main column ─────────────────────────────────────── -->
         <div class="main-column">
             <div class="container">
+
                 <header>
                     <h1 class="logo">Inkvoice</h1>
                     <p class="intro">
@@ -1142,6 +1123,14 @@
                     </div>
 
                     <div class="chapter-list" id="chapterList"></div>
+
+                    <div class="duration-estimate" id="durationEstimate">
+                        <span class="duration-estimate-label">Estimated listening time</span>
+                        <div class="duration-estimate-right">
+                            <div class="duration-estimate-value" id="durationEstimateValue"></div>
+                            <div class="duration-estimate-note" id="durationEstimateNote"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Step 3: Options -->
@@ -1157,7 +1146,7 @@
                             <div class="voice-row">
                                 <select id="voiceSelect"></select>
                                 <button type="button" class="preview-btn" id="previewBtn" title="Preview voice">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M8 5v14l11-7z"/>
                                     </svg>
                                 </button>
@@ -1169,9 +1158,39 @@
                         <div class="option-group-title">Format</div>
                         <div class="option-row">
                             <select id="formatSelect">
-                                <option value="mp3">MP3 (separate files)</option>
+                                <option value="mp3">MP3 (separate files per chapter)</option>
                                 <option value="m4b" id="m4bOption" disabled>M4B audiobook (single file with chapters)</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <div class="option-group">
+                        <div class="option-group-title">Audio quality</div>
+                        <div class="option-row">
+                            <select id="bitrateSelect">
+                                <option value="64">64 kbps — small file</option>
+                                <option value="128">128 kbps — standard</option>
+                                <option value="192" selected>192 kbps — high quality</option>
+                            </select>
+                        </div>
+                        <div class="processing-note" id="bitrateNote"></div>
+                    </div>
+
+                    <div class="option-group">
+                        <div class="option-group-title">Narration speed</div>
+                        <div class="option-row">
+                            <div class="speed-control">
+                                <input type="radio" name="speed" id="speed075" value="0.75">
+                                <label for="speed075">0.75×</label>
+                                <input type="radio" name="speed" id="speed100" value="1.0" checked>
+                                <label for="speed100">1×</label>
+                                <input type="radio" name="speed" id="speed125" value="1.25">
+                                <label for="speed125">1.25×</label>
+                                <input type="radio" name="speed" id="speed150" value="1.5">
+                                <label for="speed150">1.5×</label>
+                                <input type="radio" name="speed" id="speed200" value="2.0">
+                                <label for="speed200">2×</label>
+                            </div>
                         </div>
                     </div>
 
@@ -1185,7 +1204,7 @@
                                 <option value="summary">Key points only (~10%)</option>
                             </select>
                         </div>
-                        <div class="processing-note" id="processingNote" style="display: none;"></div>
+                        <div class="processing-note" id="processingNote" style="display:none;"></div>
                     </div>
 
                     <div class="option-group">
@@ -1194,7 +1213,7 @@
                             <input type="checkbox" id="announceChapters">
                             <div class="checkbox-label">
                                 <div class="checkbox-label-text">Announce chapter titles</div>
-                                <div class="checkbox-label-hint">Voice will read the chapter name at the start</div>
+                                <div class="checkbox-label-hint">Voice reads the chapter name at the start</div>
                             </div>
                         </label>
                         <label class="checkbox-option" id="perChapterOption">
@@ -1209,7 +1228,56 @@
                     <button class="convert-btn" id="convertBtn" disabled>Select an EPUB to begin</button>
 
                     <div class="error" id="errorText"></div>
+
+                    <!-- Progress -->
+                    <div class="progress-section" id="progressSection">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <div class="progress-info">
+                            <span class="progress-status" id="progressStatus">Starting...</span>
+                            <span class="progress-percent" id="progressPercent">0%</span>
+                        </div>
+                        <div class="progress-details">
+                            <div class="progress-detail">
+                                <div class="progress-detail-value" id="progressChapter">-</div>
+                                <div class="progress-detail-label">Chapter</div>
+                            </div>
+                            <div class="progress-detail">
+                                <div class="progress-detail-value" id="progressElapsed">0:00</div>
+                                <div class="progress-detail-label">Elapsed</div>
+                            </div>
+                            <div class="progress-detail">
+                                <div class="progress-detail-value" id="progressRemaining">--:--</div>
+                                <div class="progress-detail-label">Remaining</div>
+                            </div>
+                            <div class="progress-detail">
+                                <div class="progress-detail-value" id="progressWords">-</div>
+                                <div class="progress-detail-label">Words</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Downloads -->
+                    <div class="downloads-section" id="downloadsSection">
+                        <div class="downloads-header">
+                            <span class="success-dot"></span>
+                            <h3>Ready for download</h3>
+                        </div>
+                        <ul class="download-list" id="downloadList"></ul>
+                        <button class="download-all-btn" id="downloadAllBtn" style="display:none;">Download all as ZIP</button>
+                    </div>
                 </div>
+
+                <!-- Job History -->
+                <div class="history-section" id="historySection" style="display:none;">
+                    <div class="history-header">
+                        <span class="history-title">Recent Conversions</span>
+                        <button class="history-clear-btn" id="historyClearBtn">Clear history</button>
+                    </div>
+                    <div id="historyList"></div>
+                </div>
+
             </div>
 
             <footer>
@@ -1218,7 +1286,7 @@
             </footer>
         </div>
 
-        <!-- Jobs sidebar: appears once at least one job exists -->
+        <!-- ── Jobs sidebar ────────────────────────────────────── -->
         <aside class="jobs-sidebar" id="jobsSidebar">
             <div class="jobs-sidebar-inner">
                 <div class="jobs-sidebar-header">
@@ -1227,224 +1295,63 @@
                 </div>
                 <div class="jobs-list" id="jobsList"></div>
             </div>
-
-            <div class="chapter-list" id="chapterList"></div>
-            <div class="duration-estimate" id="durationEstimate">
-                <span class="duration-estimate-label">Estimated listening time</span>
-                <div class="duration-estimate-right">
-                    <div class="duration-estimate-value" id="durationEstimateValue"></div>
-                    <div class="duration-estimate-note" id="durationEstimateNote"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 3: Options -->
-        <div class="card options-card" id="optionsCard">
-            <div class="card-header">
-                <span class="card-number">3</span>
-                <span class="card-title">Configure output</span>
-            </div>
-
-            <div class="option-group">
-                <div class="option-group-title">Voice</div>
-                <div class="option-row">
-                    <div class="voice-row">
-                        <select id="voiceSelect"></select>
-                        <button type="button" class="preview-btn" id="previewBtn" title="Preview voice">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M8 5v14l11-7z"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="option-group">
-                <div class="option-group-title">Format</div>
-                <div class="option-row">
-                    <select id="formatSelect">
-                        <option value="mp3">MP3 (separate files)</option>
-                        <option value="m4b" id="m4bOption" disabled>M4B audiobook (single file with chapters)</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="option-group">
-                <div class="option-group-title">Audio quality</div>
-                <div class="option-row">
-                    <select id="bitrateSelect">
-                        <option value="64">64 kbps — small file</option>
-                        <option value="128">128 kbps — standard</option>
-                        <option value="192" selected>192 kbps — high quality</option>
-                    </select>
-                </div>
-                <div class="processing-note" id="bitrateNote"></div>
-            </div>
-
-            <div class="option-group">
-                <div class="option-group-title">Text processing</div>
-                <div class="option-row">
-                    <select id="textProcessingSelect">
-                        <option value="none">Original text</option>
-                        <option value="clean">Narration-ready (remove footnotes, references)</option>
-                        <option value="speed">Condensed (~30% shorter)</option>
-                        <option value="summary">Key points only (~10%)</option>
-                    </select>
-                </div>
-                <div class="processing-note" id="processingNote" style="display: none;"></div>
-            </div>
-
-
-            <div class="option-group">
-                <div class="option-group-title">Narration speed</div>
-                <div class="option-row">
-                    <div class="speed-control">
-                        <input type="radio" name="speed" id="speed075" value="0.75">
-                        <label for="speed075">0.75×</label>
-                        <input type="radio" name="speed" id="speed100" value="1.0" checked>
-                        <label for="speed100">1×</label>
-                        <input type="radio" name="speed" id="speed125" value="1.25">
-                        <label for="speed125">1.25×</label>
-                        <input type="radio" name="speed" id="speed150" value="1.5">
-                        <label for="speed150">1.5×</label>
-                        <input type="radio" name="speed" id="speed200" value="2.0">
-                        <label for="speed200">2×</label>
-                    </div>
-                </div>
-            </div>
-
-            <div class="option-group">
-                <div class="option-group-title">Options</div>
-                <label class="checkbox-option">
-                    <input type="checkbox" id="announceChapters">
-                    <div class="checkbox-label">
-                        <div class="checkbox-label-text">Announce chapter titles</div>
-                        <div class="checkbox-label-hint">Voice will read the chapter name at the start</div>
-                    </div>
-                </label>
-                <label class="checkbox-option" id="perChapterOption">
-                    <input type="checkbox" id="perChapter" checked>
-                    <div class="checkbox-label">
-                        <div class="checkbox-label-text">One file per chapter</div>
-                        <div class="checkbox-label-hint">Creates separate MP3 files for each chapter</div>
-                    </div>
-                </label>
-            </div>
-
-            <button class="convert-btn" id="convertBtn" disabled>Select an EPUB to begin</button>
-
-            <div class="error" id="errorText"></div>
-
-            <div class="progress-section" id="progressSection">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
-                </div>
-                <div class="progress-info">
-                    <span class="progress-status" id="progressStatus">Starting...</span>
-                    <span class="progress-percent" id="progressPercent">0%</span>
-                </div>
-                <div class="progress-details">
-                    <div class="progress-detail">
-                        <div class="progress-detail-value" id="progressChapter">-</div>
-                        <div class="progress-detail-label">Chapter</div>
-                    </div>
-                    <div class="progress-detail">
-                        <div class="progress-detail-value" id="progressElapsed">0:00</div>
-                        <div class="progress-detail-label">Elapsed</div>
-                    </div>
-                    <div class="progress-detail">
-                        <div class="progress-detail-value" id="progressRemaining">--:--</div>
-                        <div class="progress-detail-label">Remaining</div>
-                    </div>
-                    <div class="progress-detail">
-                        <div class="progress-detail-value" id="progressWords">-</div>
-                        <div class="progress-detail-label">Words</div>
-                    </div>
-                </div>
-                <button class="cancel-btn" id="cancelBtn">Cancel</button>
-            </div>
-
-            <div class="downloads-section" id="downloadsSection">
-                <div class="downloads-header">
-                    <span class="success-dot"></span>
-                    <h3>Ready for download</h3>
-                </div>
-                <ul class="download-list" id="downloadList"></ul>
-                <button class="download-all-btn" id="downloadAllBtn">Download all as ZIP</button>
-            </div>
-        </div>
-
-    <!-- Job History -->
-    <div class="history-section" id="historySection" style="display:none;">
-        <div class="history-header">
-            <span class="history-title">Recent Conversions</span>
-            <button class="history-clear-btn" id="historyClearBtn">Clear history</button>
-        </div>
-        <div id="historyList"></div>
-    </div>
-
-
-
         </aside>
-    </div>
+
+    </div><!-- end .page-layout -->
 
     <script>
-        // Elements
-        const dropZone = document.getElementById('dropZone');
-        const epubInput = document.getElementById('epubInput');
-        const bookInfo = document.getElementById('bookInfo');
-        const bookCover = document.getElementById('bookCover');
-        const bookTitle = document.getElementById('bookTitle');
-        const bookAuthor = document.getElementById('bookAuthor');
-        const bookStats = document.getElementById('bookStats');
-        const chaptersCard = document.getElementById('chaptersCard');
-        const chapterList = document.getElementById('chapterList');
-        const selectionStats = document.getElementById('selectionStats');
-        const optionsCard = document.getElementById('optionsCard');
-        const voiceSelect = document.getElementById('voiceSelect');
-        const formatSelect = document.getElementById('formatSelect');
-        const bitrateSelect = document.getElementById('bitrateSelect');
-        const m4bOption = document.getElementById('m4bOption');
-        const textProcessingSelect = document.getElementById('textProcessingSelect');
-        const processingNote = document.getElementById('processingNote');
-        const announceChapters = document.getElementById('announceChapters');
-        const perChapter = document.getElementById('perChapter');
-        const perChapterOption = document.getElementById('perChapterOption');
-        const convertBtn = document.getElementById('convertBtn');
-        const errorText = document.getElementById('errorText');
-        const progressSection = document.getElementById('progressSection');
-        const progressFill = document.getElementById('progressFill');
-        const progressStatus = document.getElementById('progressStatus');
-        const progressPercent = document.getElementById('progressPercent');
-        const progressChapter = document.getElementById('progressChapter');
-        const progressElapsed = document.getElementById('progressElapsed');
-        const progressRemaining = document.getElementById('progressRemaining');
-        const progressWords = document.getElementById('progressWords');
-        const cancelBtn = document.getElementById('cancelBtn');
-        const downloadsSection = document.getElementById('downloadsSection');
-        const downloadList = document.getElementById('downloadList');
-        const downloadAllBtn = document.getElementById('downloadAllBtn');
-        const previewBtn = document.getElementById('previewBtn');
-        const jobsSidebar = document.getElementById('jobsSidebar');
-        const jobsList = document.getElementById('jobsList');
-        const jobsCountBadge = document.getElementById('jobsCountBadge');
+        // ── Element refs ─────────────────────────────────────────
+        const dropZone            = document.getElementById('dropZone');
+        const epubInput           = document.getElementById('epubInput');
+        const bookInfo            = document.getElementById('bookInfo');
+        const bookCover           = document.getElementById('bookCover');
+        const bookTitle           = document.getElementById('bookTitle');
+        const bookAuthor          = document.getElementById('bookAuthor');
+        const bookStats           = document.getElementById('bookStats');
+        const chaptersCard        = document.getElementById('chaptersCard');
+        const chapterList         = document.getElementById('chapterList');
+        const selectionStats      = document.getElementById('selectionStats');
+        const optionsCard         = document.getElementById('optionsCard');
+        const voiceSelect         = document.getElementById('voiceSelect');
+        const formatSelect        = document.getElementById('formatSelect');
+        const bitrateSelect       = document.getElementById('bitrateSelect');
+        const m4bOption           = document.getElementById('m4bOption');
+        const textProcessingSelect= document.getElementById('textProcessingSelect');
+        const processingNote      = document.getElementById('processingNote');
+        const announceChapters    = document.getElementById('announceChapters');
+        const perChapter          = document.getElementById('perChapter');
+        const perChapterOption    = document.getElementById('perChapterOption');
+        const convertBtn          = document.getElementById('convertBtn');
+        const errorText           = document.getElementById('errorText');
+        const progressSection     = document.getElementById('progressSection');
+        const progressFill        = document.getElementById('progressFill');
+        const progressStatus      = document.getElementById('progressStatus');
+        const progressPercent     = document.getElementById('progressPercent');
+        const progressChapter     = document.getElementById('progressChapter');
+        const progressElapsed     = document.getElementById('progressElapsed');
+        const progressRemaining   = document.getElementById('progressRemaining');
+        const progressWords       = document.getElementById('progressWords');
+        const downloadsSection    = document.getElementById('downloadsSection');
+        const downloadList        = document.getElementById('downloadList');
+        const downloadAllBtn      = document.getElementById('downloadAllBtn');
+        const previewBtn          = document.getElementById('previewBtn');
+        const jobsSidebar         = document.getElementById('jobsSidebar');
+        const jobsList            = document.getElementById('jobsList');
+        const jobsCountBadge      = document.getElementById('jobsCountBadge');
 
-        // State
-        let uploadId = null;
-        let chapters = [];
-        let m4bAvailable = false;
-        let geminiAvailable = false;
-        let ttsAvailable = false;
-        let previewAudio = null;
-        let voiceData = [];
+        // ── State ────────────────────────────────────────────────
+        let uploadId       = null;
+        let chapters       = [];
+        let m4bAvailable   = false;
+        let geminiAvailable= false;
+        let ttsAvailable   = false;
+        let previewAudio   = null;
+        let voiceData      = [];
 
         // Duration estimate constants
         const WORDS_PER_MINUTE = 150;
         const PROCESSING_MULTIPLIERS = {
-            'none':    1.0,
-            'clean':   1.0,
-            'speed':   0.3,
-            'summary': 0.1,
+            none: 1.0, clean: 1.0, speed: 0.3, summary: 0.1,
         };
 
         function getProcessingMultiplier() {
@@ -1452,224 +1359,213 @@
         }
 
         function formatDuration(words, multiplier) {
-            multiplier = multiplier !== undefined ? multiplier : getProcessingMultiplier();
-            const effectiveWords = Math.round(words * multiplier);
-            const totalMins = Math.round(effectiveWords / WORDS_PER_MINUTE);
-            const hours = Math.floor(totalMins / 60);
-            const mins = totalMins % 60;
-            if (hours > 0) return `${hours}h ${mins}m`;
-            return `${totalMins}m`;
+            if (multiplier === undefined) multiplier = getProcessingMultiplier();
+            const totalMins = Math.round(words * multiplier / WORDS_PER_MINUTE);
+            const h = Math.floor(totalMins / 60), m = totalMins % 60;
+            return h > 0 ? `${h}h ${m}m` : `${totalMins}m`;
         }
 
         function formatChapterDuration(words) {
-            const multiplier = getProcessingMultiplier();
-            const effectiveWords = Math.round(words * multiplier);
-            const mins = Math.round(effectiveWords / WORDS_PER_MINUTE);
-            if (mins < 1) return '<1 min';
-            return `~${mins} min`;
+            const mins = Math.round(words * getProcessingMultiplier() / WORDS_PER_MINUTE);
+            return mins < 1 ? '<1m' : `~${mins}m`;
         }
 
+        function formatWords(n) {
+            return n >= 1000 ? `${(n/1000).toFixed(1)}k` : String(n);
+        }
 
-        // Job queue: map of jobId -> { id, title, status, progress, message, files, cardEl }
+        function formatTime(seconds) {
+            if (seconds == null || isNaN(seconds)) return '--:--';
+            const m = Math.floor(seconds / 60), s = Math.floor(seconds % 60);
+            return `${m}:${String(s).padStart(2, '0')}`;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        }
+
+        // ── Icons ────────────────────────────────────────────────
+        const playIcon    = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        const stopIcon    = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>';
+        const loadingIcon = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></path></svg>';
+
+        // ── Job queue ────────────────────────────────────────────
+
+        // Map jobId → { id, title, status, progress, message, files, cardEl }
         const jobQueue = new Map();
 
-        // Icons
-        const playIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-        const stopIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>';
-        const loadingIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></path></svg>';
-
-        // -------------------------
-        // Job queue management
-        // -------------------------
-
         function addJob(jobId, title) {
-            // Create the card DOM element
             const card = document.createElement('div');
             card.className = 'job-card';
             card.id = `job-${jobId}`;
             card.innerHTML = `
                 <div class="job-card-header">
-                    <span class="job-status-dot processing" id="job-dot-${jobId}"></span>
+                    <span class="job-status-dot processing" id="dot-${jobId}"></span>
                     <div class="job-card-info">
                         <div class="job-card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
-                        <div class="job-card-status" id="job-status-${jobId}">Starting...</div>
+                        <div class="job-card-status" id="st-${jobId}">Starting…</div>
                     </div>
-                    <span class="job-progress-pct" id="job-pct-${jobId}" style="font-size:0.78rem;color:var(--text-muted);flex-shrink:0;margin-left:4px;">0%</span>
+                    <span class="job-pct" id="pct-${jobId}">0%</span>
                 </div>
                 <div class="job-progress-bar">
-                    <div class="job-progress-fill" id="job-fill-${jobId}"></div>
+                    <div class="job-progress-fill" id="fill-${jobId}"></div>
                 </div>
-                <div class="job-downloads" id="job-downloads-${jobId}">
-                    <div class="job-download-links" id="job-links-${jobId}"></div>
+                <div class="job-downloads" id="dl-${jobId}">
+                    <div class="job-download-links" id="links-${jobId}"></div>
                 </div>
-                <div class="job-error-msg" id="job-error-${jobId}"></div>
+                <div class="job-error-msg" id="err-${jobId}"></div>
+                <button class="job-cancel-btn visible" id="cancel-${jobId}" title="Cancel this job">Cancel</button>
             `;
 
-            // Insert newest jobs at top
             jobsList.insertBefore(card, jobsList.firstChild);
 
-            jobQueue.set(jobId, {
-                id: jobId,
-                title,
-                status: 'processing',
-                progress: 0,
-                message: 'Starting...',
-                files: [],
-                cardEl: card,
-            });
+            // Wire cancel button
+            card.querySelector(`#cancel-${jobId}`).addEventListener('click', () => cancelJob(jobId));
 
-            updateJobsUI();
+            jobQueue.set(jobId, { id: jobId, title, status: 'processing', progress: 0, files: [] });
+            syncJobsUI();
             return card;
+        }
+
+        async function cancelJob(jobId) {
+            const btn = document.getElementById(`cancel-${jobId}`);
+            if (btn) { btn.disabled = true; btn.textContent = 'Cancelling…'; }
+            try {
+                await fetch(`/api/cancel/${jobId}`, { method: 'DELETE' });
+            } catch (_) {}
         }
 
         function updateJobCard(jobId, data) {
             const job = jobQueue.get(jobId);
             if (!job) return;
 
-            job.status = data.status;
+            job.status   = data.status;
             job.progress = data.progress;
-            job.message = data.message;
+            job.message  = data.message;
             if (data.files) job.files = data.files;
 
-            const dot = document.getElementById(`job-dot-${jobId}`);
-            const statusEl = document.getElementById(`job-status-${jobId}`);
-            const fillEl = document.getElementById(`job-fill-${jobId}`);
-            const pctEl = document.getElementById(`job-pct-${jobId}`);
-            const downloadsEl = document.getElementById(`job-downloads-${jobId}`);
-            const linksEl = document.getElementById(`job-links-${jobId}`);
-            const errorEl = document.getElementById(`job-error-${jobId}`);
+            const dot    = document.getElementById(`dot-${jobId}`);
+            const st     = document.getElementById(`st-${jobId}`);
+            const fill   = document.getElementById(`fill-${jobId}`);
+            const pct    = document.getElementById(`pct-${jobId}`);
+            const dlEl   = document.getElementById(`dl-${jobId}`);
+            const links  = document.getElementById(`links-${jobId}`);
+            const errEl  = document.getElementById(`err-${jobId}`);
+            const cancelBtn = document.getElementById(`cancel-${jobId}`);
 
             if (!dot) return;
 
-            // Update progress bar
-            fillEl.style.width = `${data.progress}%`;
-            pctEl.textContent = `${Math.round(data.progress)}%`;
+            fill.style.width = `${data.progress}%`;
+            pct.textContent  = `${Math.round(data.progress)}%`;
 
             if (data.status === 'processing') {
-                dot.className = 'job-status-dot processing';
-                statusEl.className = 'job-card-status';
-                statusEl.textContent = data.message;
-                fillEl.className = 'job-progress-fill';
+                dot.className  = 'job-status-dot processing';
+                st.className   = 'job-card-status';
+                st.textContent = data.message;
+                fill.className = 'job-progress-fill';
 
             } else if (data.status === 'complete') {
-                dot.className = 'job-status-dot complete';
-                statusEl.className = 'job-card-status';
-                statusEl.textContent = 'Complete';
-                pctEl.textContent = '100%';
-                fillEl.style.width = '100%';
-                fillEl.className = 'job-progress-fill complete';
+                dot.className  = 'job-status-dot complete';
+                st.className   = 'job-card-status';
+                st.textContent = 'Complete';
+                pct.textContent= '100%';
+                fill.style.width  = '100%';
+                fill.className = 'job-progress-fill complete';
 
-                // Build download links
+                if (cancelBtn) { cancelBtn.classList.remove('visible'); }
+
                 if (data.files && data.files.length > 0) {
-                    linksEl.innerHTML = '';
+                    links.innerHTML = '';
                     data.files.forEach(file => {
                         const a = document.createElement('a');
-                        a.className = 'job-download-link';
-                        a.href = `/api/download/${jobId}/${encodeURIComponent(file)}`;
-                        a.download = file;
-                        a.textContent = file;
-                        a.title = file;
-                        linksEl.appendChild(a);
+                        a.className  = 'job-download-link';
+                        a.href       = `/api/download/${jobId}/${encodeURIComponent(file)}`;
+                        a.download   = file;
+                        a.textContent= file;
+                        a.title      = file;
+                        links.appendChild(a);
                     });
-
-                    // "Download all" link for multiple files
                     if (data.files.length > 1) {
                         const allA = document.createElement('a');
-                        allA.className = 'job-download-all-link';
-                        allA.href = `/api/download-all/${jobId}`;
+                        allA.className   = 'job-download-all-link';
+                        allA.href        = `/api/download-all/${jobId}`;
                         allA.textContent = 'Download all as ZIP';
-                        linksEl.appendChild(allA);
+                        links.appendChild(allA);
                     }
                 }
-                downloadsEl.classList.add('visible');
+                dlEl.classList.add('visible');
 
             } else if (data.status === 'error') {
-                dot.className = 'job-status-dot error';
-                statusEl.className = 'job-card-status error-text';
-                statusEl.textContent = 'Failed';
-                fillEl.className = 'job-progress-fill error';
-                pctEl.textContent = '';
-                errorEl.textContent = data.message;
-                errorEl.classList.add('visible');
+                dot.className  = 'job-status-dot error';
+                st.className   = 'job-card-status error-text';
+                st.textContent = 'Failed';
+                fill.className = 'job-progress-fill error';
+                pct.textContent= '';
+                errEl.textContent = data.message;
+                errEl.classList.add('visible');
+                if (cancelBtn) { cancelBtn.classList.remove('visible'); }
+
+            } else if (data.status === 'cancelled') {
+                dot.className  = 'job-status-dot cancelled';
+                st.className   = 'job-card-status';
+                st.textContent = 'Cancelled';
+                fill.className = 'job-progress-fill';
+                pct.textContent= '';
+                if (cancelBtn) { cancelBtn.classList.remove('visible'); }
             }
 
-            updateJobsUI();
+            syncJobsUI();
         }
 
-        function updateJobsUI() {
+        function syncJobsUI() {
             const count = jobQueue.size;
             jobsCountBadge.textContent = count;
-            if (count > 0) {
-                jobsSidebar.classList.add('visible');
-            }
+            if (count > 0) jobsSidebar.classList.add('visible');
         }
 
-        function escapeHtml(str) {
-            const d = document.createElement('div');
-            d.textContent = str;
-            return d.innerHTML;
-        }
-
-        // -------------------------
-        // SSE progress listener
-        // -------------------------
+        // ── SSE listener ─────────────────────────────────────────
 
         function listenForProgress(jobId) {
-            const eventSource = new EventSource(`/api/progress/${jobId}`);
+            const es = new EventSource(`/api/progress/${jobId}`);
 
-            eventSource.onmessage = (event) => {
+            es.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 updateJobCard(jobId, data);
-
-                if (data.status === 'complete' || data.status === 'error') {
-                    eventSource.close();
+                if (data.status === 'complete' || data.status === 'error' || data.status === 'cancelled') {
+                    es.close();
                 }
             };
 
-            eventSource.onerror = () => {
-                eventSource.close();
+            es.onerror = () => {
+                es.close();
                 const job = jobQueue.get(jobId);
                 if (job && job.status === 'processing') {
-                    updateJobCard(jobId, {
-                        status: 'error',
-                        progress: 0,
-                        message: 'Connection lost',
-                        files: [],
-                    });
+                    updateJobCard(jobId, { status: 'error', progress: 0, message: 'Connection lost', files: [] });
                 }
             };
         }
 
-        // -------------------------
-        // Capabilities & voices
-        // -------------------------
+        // ── Capabilities & voices ────────────────────────────────
 
         async function loadCapabilities() {
             try {
-                const response = await fetch('/api/capabilities');
-                const data = await response.json();
-
+                const data = await fetch('/api/capabilities').then(r => r.json());
                 m4bAvailable = data.formats.m4b;
-                m4bOption.disabled = !m4bAvailable;
+                m4bOption.disabled   = !m4bAvailable;
                 m4bOption.textContent = m4bAvailable
                     ? 'M4B audiobook (single file with chapters)'
-                    : 'M4B (requires ffmpeg)';
-
-                if (m4bAvailable) {
-                    formatSelect.value = 'm4b';
-                    perChapterOption.style.opacity = '0.5';
-                    perChapter.disabled = true;
-                    perChapter.checked = false;
-                }
+                    : 'M4B (requires ffmpeg — not installed)';
 
                 geminiAvailable = data.gemini_available;
-                ttsAvailable = data.tts_available;
+                ttsAvailable    = data.tts_available;
 
                 if (geminiAvailable) {
                     textProcessingSelect.value = 'clean';
                     processingNote.style.display = 'block';
                     processingNote.className = 'processing-note ready';
-                    processingNote.textContent = 'Gemini removes footnotes, URLs, and other non-spoken content';
+                    processingNote.textContent = 'Gemini removes footnotes, URLs, and non-spoken content';
                 }
 
                 if (!ttsAvailable) {
@@ -1681,46 +1577,34 @@
             }
         }
 
-        function updateButtonText() {
-            if (uploadId) {
-                convertBtn.textContent = `Convert to ${formatSelect.value.toUpperCase()}`;
-            }
-        }
-
         async function loadVoices() {
             try {
-                const response = await fetch('/api/voices');
-                const data = await response.json();
+                const data = await fetch('/api/voices').then(r => r.json());
                 voiceData = data.voices;
-
                 voiceSelect.innerHTML = '';
 
                 const groups = {
                     narration: { label: 'Narration', voices: [] },
-                    casual: { label: 'Casual', voices: [] },
-                    neutral: { label: 'Neutral', voices: [] },
-                    character: { label: 'Character', voices: [] }
+                    casual:    { label: 'Casual',    voices: [] },
+                    neutral:   { label: 'Neutral',   voices: [] },
                 };
 
                 voiceData.forEach(v => {
-                    const group = groups[v.best_for] || groups.neutral;
-                    group.voices.push(v);
+                    (groups[v.best_for] || groups.neutral).voices.push(v);
                 });
 
-                for (const [key, group] of Object.entries(groups)) {
+                for (const [, group] of Object.entries(groups)) {
                     if (group.voices.length === 0) continue;
-                    const optgroup = document.createElement('optgroup');
-                    optgroup.label = group.label;
-
+                    const og = document.createElement('optgroup');
+                    og.label = group.label;
                     group.voices.forEach(v => {
-                        const option = document.createElement('option');
-                        option.value = v.name;
-                        option.textContent = `${v.name} — ${v.characteristic}`;
-                        if (v.name === data.default) option.selected = true;
-                        optgroup.appendChild(option);
+                        const opt = document.createElement('option');
+                        opt.value = v.name;
+                        opt.textContent = `${v.name} — ${v.characteristic}`;
+                        if (v.name === data.default) opt.selected = true;
+                        og.appendChild(opt);
                     });
-
-                    voiceSelect.appendChild(optgroup);
+                    voiceSelect.appendChild(og);
                 }
             } catch (e) {
                 console.error('Failed to load voices:', e);
@@ -1730,50 +1614,12 @@
         loadCapabilities();
         loadVoices();
 
-        // -------------------------
-        // Text processing note
-        // -------------------------
+        // ── Bitrate note ─────────────────────────────────────────
 
-        textProcessingSelect.addEventListener('change', () => {
-            const mode = textProcessingSelect.value;
-            if (mode === 'none') {
-                processingNote.style.display = 'none';
-            } else if (mode === 'clean') {
-                processingNote.style.display = 'block';
-                processingNote.className = 'processing-note' + (geminiAvailable ? ' ready' : ' warning');
-                processingNote.textContent = geminiAvailable
-                    ? 'Gemini removes footnotes, URLs, and other non-spoken content'
-                    : 'Gemini not configured — basic cleanup only';
-            } else if (mode === 'speed') {
-                processingNote.style.display = 'block';
-                processingNote.className = 'processing-note' + (geminiAvailable ? ' ready' : ' warning');
-                processingNote.textContent = geminiAvailable
-                    ? 'Gemini condenses while preserving key information'
-                    : 'Requires Gemini API';
-            } else {
-                processingNote.style.display = 'block';
-                processingNote.className = 'processing-note' + (geminiAvailable ? ' ready' : ' warning');
-                processingNote.textContent = geminiAvailable
-                    ? 'Gemini extracts main ideas and conclusions'
-                    : 'Requires Gemini API';
-            }
-            // Re-compute duration estimates when processing mode changes
-            updateSelectionStats();
-            // Refresh per-chapter duration labels
-            chapterList.querySelectorAll('.chapter-item .meta').forEach((meta, i) => {
-                const ch = chapters[i];
-                if (ch) meta.textContent = `${formatWords(ch.words)} · ${formatChapterDuration(ch.words)}`;
-            });
-        });
-
-        // Format change
-        // Update bitrate file size estimate
         function updateBitrateNote() {
             const selected = getSelectedChapters();
-            const words = selected.length > 0
-                ? selected.reduce((sum, i) => sum + chapters[i].words, 0)
-                : 0;
-            const mins = words / 150;
+            const words = selected.reduce((s, i) => s + chapters[i].words, 0);
+            const mins = words / WORDS_PER_MINUTE;
             const bitrate = parseInt(bitrateSelect.value);
             const sizeMB = (bitrate * 1000 / 8 * mins * 60) / (1024 * 1024);
             const note = document.getElementById('bitrateNote');
@@ -1787,17 +1633,58 @@
 
         bitrateSelect.addEventListener('change', updateBitrateNote);
 
+        // ── Text processing note ──────────────────────────────────
+
+        textProcessingSelect.addEventListener('change', () => {
+            const mode = textProcessingSelect.value;
+            if (mode === 'none') {
+                processingNote.style.display = 'none';
+            } else if (mode === 'clean') {
+                processingNote.style.display = 'block';
+                processingNote.className = 'processing-note ' + (geminiAvailable ? 'ready' : 'warning');
+                processingNote.textContent = geminiAvailable
+                    ? 'Gemini removes footnotes, URLs, and non-spoken content'
+                    : 'Gemini not configured — basic cleanup only';
+            } else if (mode === 'speed') {
+                processingNote.style.display = 'block';
+                processingNote.className = 'processing-note ' + (geminiAvailable ? 'ready' : 'warning');
+                processingNote.textContent = geminiAvailable
+                    ? 'Gemini condenses while preserving key information'
+                    : 'Requires Gemini API key';
+            } else {
+                processingNote.style.display = 'block';
+                processingNote.className = 'processing-note ' + (geminiAvailable ? 'ready' : 'warning');
+                processingNote.textContent = geminiAvailable
+                    ? 'Gemini extracts main ideas and conclusions'
+                    : 'Requires Gemini API key';
+            }
+            updateSelectionStats();
+            // Refresh per-chapter durations
+            chapterList.querySelectorAll('.chapter-item').forEach((item, i) => {
+                const meta = item.querySelector('.meta');
+                if (meta && chapters[i]) {
+                    meta.textContent = `${formatWords(chapters[i].words)} · ${formatChapterDuration(chapters[i].words)}`;
+                }
+            });
+        });
+
+        // ── Format change ─────────────────────────────────────────
+
         formatSelect.addEventListener('change', () => {
             const isM4B = formatSelect.value === 'm4b';
             perChapterOption.style.opacity = isM4B ? '0.5' : '1';
             perChapter.disabled = isM4B;
             if (isM4B) perChapter.checked = false;
-            updateButtonText();
+            updateConvertBtn();
         });
 
-        // -------------------------
-        // Voice preview
-        // -------------------------
+        function updateConvertBtn() {
+            if (uploadId) {
+                convertBtn.textContent = `Convert to ${formatSelect.value.toUpperCase()}`;
+            }
+        }
+
+        // ── Voice preview ─────────────────────────────────────────
 
         previewBtn.addEventListener('click', async () => {
             if (previewAudio && !previewAudio.paused) {
@@ -1807,10 +1694,8 @@
                 previewBtn.classList.remove('playing');
                 return;
             }
-
             previewBtn.disabled = true;
             previewBtn.innerHTML = loadingIcon;
-
             try {
                 if (!previewAudio) {
                     previewAudio = new Audio();
@@ -1819,7 +1704,6 @@
                         previewBtn.classList.remove('playing');
                     });
                 }
-
                 previewAudio.src = `/api/voice-preview/${voiceSelect.value}`;
                 await previewAudio.play();
                 previewBtn.innerHTML = stopIcon;
@@ -1839,15 +1723,10 @@
             }
         });
 
-        // -------------------------
-        // Drag and drop / file upload
-        // -------------------------
+        // ── File upload / drop ────────────────────────────────────
 
         dropZone.addEventListener('click', () => epubInput.click());
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
@@ -1856,13 +1735,11 @@
                 handleFile(e.dataTransfer.files[0]);
             }
         });
-        epubInput.addEventListener('change', (e) => {
-            if (e.target.files.length) handleFile(e.target.files[0]);
-        });
+        epubInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
 
         async function handleFile(file) {
             dropZone.classList.add('has-file');
-            dropZone.querySelector('.drop-zone-text').textContent = 'Parsing...';
+            dropZone.querySelector('.drop-zone-text').textContent = 'Parsing…';
             dropZone.querySelector('.drop-zone-hint').textContent = file.name;
             clearError();
 
@@ -1870,23 +1747,19 @@
             formData.append('epub_file', file);
 
             try {
-                const response = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const response = await fetch('/api/upload', { method: 'POST', body: formData });
                 if (!response.ok) throw new Error('Failed to parse EPUB');
 
                 const data = await response.json();
                 uploadId = data.upload_id;
                 chapters = data.chapters;
 
-                bookTitle.textContent = data.title;
+                bookTitle.textContent  = data.title;
                 bookAuthor.textContent = data.author ? `by ${data.author}` : '';
 
-                const hours = Math.floor(data.total_words / 150 / 60);
-                const mins = Math.round((data.total_words / 150) % 60);
-                const duration = hours > 0 ? `~${hours}h ${mins}m` : `~${mins} min`;
+                const totalMins = Math.round(data.total_words / WORDS_PER_MINUTE);
+                const h = Math.floor(totalMins / 60), m = totalMins % 60;
+                const duration = h > 0 ? `~${h}h ${m}m` : `~${m} min`;
                 bookStats.textContent = `${data.total_words.toLocaleString()} words · ${duration} audio`;
 
                 if (data.has_cover) {
@@ -1901,15 +1774,14 @@
                 dropZone.querySelector('.drop-zone-hint').textContent = 'Click to change';
 
                 renderChapters();
-                updateBitrateNote();
                 chaptersCard.style.display = 'block';
-                optionsCard.style.display = 'block';
+                optionsCard.style.display  = 'block';
 
                 convertBtn.disabled = false;
                 convertBtn.textContent = `Convert to ${formatSelect.value.toUpperCase()}`;
 
-            } catch (error) {
-                showError(error.message);
+            } catch (err) {
+                showError(err.message);
                 dropZone.classList.remove('has-file');
                 dropZone.querySelector('.drop-zone-text').textContent = 'Drop your EPUB here or click to browse';
                 dropZone.querySelector('.drop-zone-hint').textContent = 'EPUB files only';
@@ -1925,11 +1797,11 @@
 
                 let badge = '';
                 if (ch.is_front_matter) badge = '<span class="badge">front</span>';
-                if (ch.is_back_matter) badge = '<span class="badge">back</span>';
+                if (ch.is_back_matter)  badge = '<span class="badge">back</span>';
 
                 div.innerHTML = `
                     <input type="checkbox" ${isContent ? 'checked' : ''} data-index="${i}">
-                    <span class="title">${ch.title}${badge}</span>
+                    <span class="title">${escapeHtml(ch.title)}${badge}</span>
                     <span class="meta">${formatWords(ch.words)} · ${formatChapterDuration(ch.words)}</span>
                 `;
 
@@ -1949,253 +1821,111 @@
 
         function updateSelectionStats() {
             const selected = getSelectedChapters();
-            const words = selected.reduce((sum, i) => sum + chapters[i].words, 0);
-            const multiplier = getProcessingMultiplier();
-            const duration = formatDuration(words, multiplier);
+            const words = selected.reduce((s, i) => s + chapters[i].words, 0);
             selectionStats.textContent = `${selected.length} of ${chapters.length} · ${words.toLocaleString()} words`;
 
-            // Update duration estimate banner
-            const durationEstimate = document.getElementById('durationEstimate');
-            const durationEstimateValue = document.getElementById('durationEstimateValue');
-            const durationEstimateNote = document.getElementById('durationEstimateNote');
+            const durationEl   = document.getElementById('durationEstimate');
+            const durationVal  = document.getElementById('durationEstimateValue');
+            const durationNote = document.getElementById('durationEstimateNote');
             if (words > 0) {
-                durationEstimate.style.display = 'flex';
-                durationEstimateValue.textContent = duration;
+                durationEl.style.display = 'flex';
+                durationVal.textContent  = formatDuration(words);
                 const mode = textProcessingSelect.value;
-                if (mode === 'speed') {
-                    durationEstimateNote.textContent = 'condensed to ~30%';
-                } else if (mode === 'summary') {
-                    durationEstimateNote.textContent = 'key points only (~10%)';
-                } else {
-                    durationEstimateNote.textContent = '';
-                }
+                durationNote.textContent = mode === 'speed' ? 'condensed to ~30%'
+                                         : mode === 'summary' ? 'key points only (~10%)' : '';
             } else {
-                durationEstimate.style.display = 'none';
+                durationEl.style.display = 'none';
             }
         }
 
-        function formatWords(n) {
-            return n >= 1000 ? `${(n/1000).toFixed(1)}k` : n.toString();
-        }
-
-        function selectAll() {
-            chapterList.querySelectorAll('input').forEach(cb => cb.checked = true);
-            updateSelectionStats();
-        }
-
-        function selectNone() {
-            chapterList.querySelectorAll('input').forEach(cb => cb.checked = false);
-            updateSelectionStats();
-        }
+        function selectAll()  { chapterList.querySelectorAll('input').forEach(c => c.checked = true);  updateSelectionStats(); }
+        function selectNone() { chapterList.querySelectorAll('input').forEach(c => c.checked = false); updateSelectionStats(); }
 
         function getSelectedChapters() {
-            return Array.from(chapterList.querySelectorAll('input:checked'))
-                .map(cb => parseInt(cb.dataset.index));
+            return Array.from(chapterList.querySelectorAll('input:checked')).map(cb => parseInt(cb.dataset.index));
         }
 
-        // -------------------------
-        // Conversion + form reset
-        // -------------------------
+        // ── Conversion ────────────────────────────────────────────
 
         convertBtn.addEventListener('click', startConversion);
 
-        cancelBtn.addEventListener('click', async () => {
-            if (!currentJobId) return;
-            // Optimistic UI: disable immediately
-            cancelBtn.disabled = true;
-            cancelBtn.textContent = 'Cancelling...';
-            try {
-                await fetch(`/api/cancel/${currentJobId}`, { method: 'DELETE' });
-            } catch (e) {
-                // Ignore network errors — the SSE handler will catch the cancelled status
-            }
-        });
-
         async function startConversion() {
             const selected = getSelectedChapters();
-            if (selected.length === 0) {
-                showError('Please select at least one chapter');
-                return;
-            }
+            if (selected.length === 0) { showError('Please select at least one chapter'); return; }
 
-            // Capture values before resetting
             const currentUploadId = uploadId;
-            const currentTitle = bookTitle.textContent || 'Untitled';
+            const currentTitle    = bookTitle.textContent || 'Untitled';
 
-            convertBtn.disabled = true;
-            convertBtn.textContent = 'Starting...';
+            convertBtn.disabled    = true;
+            convertBtn.textContent = 'Starting…';
             clearError();
 
-            progressFill.style.width = '0%';
-            progressPercent.textContent = '0%';
-            progressStatus.textContent = 'Starting...';
-            cancelBtn.style.display = 'block';
-            cancelBtn.disabled = false;
-            cancelBtn.textContent = 'Cancel';
-
             const formData = new FormData();
-            formData.append('upload_id', currentUploadId);
-            formData.append('selected_chapters', JSON.stringify(selected));
-            formData.append('voice', voiceSelect.value);
-            formData.append('output_format', formatSelect.value);
-            formData.append('per_chapter', perChapter.checked);
-            formData.append('announce_chapters', announceChapters.checked);
-            formData.append('text_processing', textProcessingSelect.value);
-            const speedSelected = document.querySelector('input[name="speed"]:checked');
-            formData.append('speed', speedSelected ? speedSelected.value : '1.0');
-            formData.append('bitrate', bitrateSelect.value);
+            formData.append('upload_id',         currentUploadId);
+            formData.append('selected_chapters',  JSON.stringify(selected));
+            formData.append('voice',              voiceSelect.value);
+            formData.append('output_format',      formatSelect.value);
+            formData.append('per_chapter',        perChapter.checked);
+            formData.append('announce_chapters',  announceChapters.checked);
+            formData.append('text_processing',    textProcessingSelect.value);
+            formData.append('speed',              (document.querySelector('input[name="speed"]:checked') || {value: '1.0'}).value);
+            formData.append('bitrate',            bitrateSelect.value);
 
             try {
-                const response = await fetch('/api/convert', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const response = await fetch('/api/convert', { method: 'POST', body: formData });
                 if (!response.ok) throw new Error('Conversion failed');
 
-                const data = await response.json();
+                const data  = await response.json();
                 const jobId = data.job_id;
 
-                // Add job to queue panel
                 addJob(jobId, currentTitle);
-
-                // Start SSE listener for this job
                 listenForProgress(jobId);
-
-                // Reset the form so user can start another
                 resetForm();
 
-            } catch (error) {
-                showError(error.message);
-                convertBtn.disabled = false;
+            } catch (err) {
+                showError(err.message);
+                convertBtn.disabled    = false;
                 convertBtn.textContent = `Convert to ${formatSelect.value.toUpperCase()}`;
             }
         }
 
         function resetForm() {
-            // Reset upload state
-            uploadId = null;
-            chapters = [];
+            uploadId  = null;
+            chapters  = [];
 
-            // Reset drop zone
             dropZone.classList.remove('has-file', 'dragover');
             dropZone.querySelector('.drop-zone-text').textContent = 'Drop your EPUB here or click to browse';
             dropZone.querySelector('.drop-zone-hint').textContent = 'EPUB files only';
             epubInput.value = '';
 
-            // Hide book info and step cards
-            bookInfo.className = 'book-info';
-            bookCover.src = '';
-            bookTitle.textContent = '';
-            bookAuthor.textContent = '';
-            bookStats.textContent = '';
-            chaptersCard.style.display = 'none';
-            optionsCard.style.display = 'none';
+            bookInfo.className  = 'book-info';
+            bookCover.src       = '';
+            bookTitle.textContent = bookAuthor.textContent = bookStats.textContent = '';
+            chaptersCard.style.display = optionsCard.style.display = 'none';
 
-            // Reset convert button
-            convertBtn.disabled = true;
+            convertBtn.disabled    = true;
             convertBtn.textContent = 'Select an EPUB to begin';
-
             clearError();
         }
 
-        function listenForProgressLegacy(jobId) {
-            const eventSource = new EventSource(`/api/progress/${jobId}`);
-
-            eventSource.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-
-                progressFill.style.width = `${data.progress}%`;
-                progressPercent.textContent = `${Math.round(data.progress)}%`;
-                progressStatus.textContent = data.message;
-
-                if (data.details) {
-                    const d = data.details;
-                    if (d.chapter_total > 0) {
-                        progressChapter.textContent = `${d.chapter_current || 0}/${d.chapter_total}`;
-                    }
-                    progressElapsed.textContent = formatTime(d.elapsed_seconds);
-                    progressRemaining.textContent = formatTime(d.estimated_remaining_seconds);
-                    if (d.words_total > 0) {
-                        progressWords.textContent = `${formatWords(d.words_processed)}/${formatWords(d.words_total)}`;
-                    }
-                }
-
-                if (data.status === 'complete') {
-                    cancelBtn.style.display = 'none';
-                    eventSource.close();
-                    showDownloads(jobId, data.files);
-                } else if (data.status === 'cancelled') {
-                    cancelBtn.style.display = 'none';
-                    eventSource.close();
-                    showError('Conversion was cancelled.');
-                } else if (data.status === 'error') {
-                    cancelBtn.style.display = 'none';
-                    eventSource.close();
-                    showError(data.message);
-                }
-            };
-
-            eventSource.onerror = () => {
-                cancelBtn.style.display = 'none';
-                eventSource.close();
-                showError('Connection lost');
-            };
-        }
-
-        function showDownloads(jobId, files) {
-            convertBtn.disabled = false;
-            convertBtn.textContent = `Convert to ${formatSelect.value.toUpperCase()}`;
-            cancelBtn.style.display = 'none';
-
-            downloadList.innerHTML = '';
-
-            // Save to history
-            addHistoryEntry({
-                jobId,
-                title: bookTitle.textContent || 'Unknown title',
-                author: (bookAuthor.textContent || '').replace(/^by /, ''),
-                files: files,
-                completedAt: new Date().toISOString(),
-            });
-            files.forEach(file => {
-                const li = document.createElement('li');
-                li.innerHTML = `
-                    <span>${file}</span>
-                    <a href="/api/download/${jobId}/${encodeURIComponent(file)}" download>Download</a>
-                `;
-                downloadList.appendChild(li);
-            });
-
-            downloadAllBtn.style.display = files.length > 1 ? 'block' : 'none';
-            downloadAllBtn.onclick = () => window.location.href = `/api/download-all/${jobId}`;
-
-            downloadsSection.style.display = 'block';
-        }
-
-
-        // -------------------------
-        // Error helpers
-        // -------------------------
+        // ── Error helpers ─────────────────────────────────────────
 
         function showError(message) {
-            errorText.textContent = message;
+            errorText.textContent  = message;
             convertBtn.textContent = uploadId ? `Convert to ${formatSelect.value.toUpperCase()}` : 'Select an EPUB to begin';
-            convertBtn.disabled = !uploadId;
+            convertBtn.disabled    = !uploadId;
         }
 
+        function clearError() { errorText.textContent = ''; }
 
-        // ── Job History (localStorage) ──────────────────────────────────────
+        // ── Job History (localStorage + server) ───────────────────
 
         const HISTORY_KEY = 'inkvoice_history';
-        const HISTORY_MAX = 10;
+        const HISTORY_MAX = 20;
 
         function loadHistory() {
-            try {
-                return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-            } catch {
-                return [];
-            }
+            try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+            catch { return []; }
         }
 
         function saveHistory(entries) {
@@ -2204,9 +1934,7 @@
 
         function addHistoryEntry(entry) {
             const entries = loadHistory();
-            // Deduplicate by jobId
             const filtered = entries.filter(e => e.jobId !== entry.jobId);
-            // Prepend newest, cap at HISTORY_MAX
             filtered.unshift(entry);
             saveHistory(filtered.slice(0, HISTORY_MAX));
             renderHistory();
@@ -2217,27 +1945,59 @@
             renderHistory();
         }
 
-        function formatHistoryDate(isoString) {
+        function formatHistoryDate(isoOrEpoch) {
             try {
-                const d = new Date(isoString);
+                const d = typeof isoOrEpoch === 'number'
+                    ? new Date(isoOrEpoch * 1000)
+                    : new Date(isoOrEpoch);
                 return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-                    + ' at '
-                    + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-            } catch {
-                return isoString;
-            }
+                    + ' at ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+            } catch { return String(isoOrEpoch); }
         }
 
         async function renderHistory() {
-            const entries = loadHistory();
-            const section = document.getElementById('historySection');
-            const list = document.getElementById('historyList');
+            // Merge localStorage + server jobs
+            const local = loadHistory();
+            let serverJobs = [];
+            try {
+                const res = await fetch('/api/jobs');
+                if (res.ok) {
+                    const d = await res.json();
+                    serverJobs = d.jobs || [];
+                }
+            } catch (_) {}
 
-            if (entries.length === 0) {
-                section.style.display = 'none';
-                list.innerHTML = '';
-                return;
-            }
+            // Build merged list (server is source of truth, local adds metadata like title/author)
+            const byId = new Map();
+            local.forEach(e => byId.set(e.jobId, e));
+            serverJobs.forEach(sj => {
+                const existing = byId.get(sj.job_id) || {};
+                byId.set(sj.job_id, {
+                    jobId: sj.job_id,
+                    title: sj.title || existing.title || 'Untitled',
+                    author: sj.author || existing.author || '',
+                    files: sj.files && sj.files.length > 0 ? sj.files : (existing.files || []),
+                    completedAt: sj.completed_at || existing.completedAt,
+                });
+            });
+
+            const entries = Array.from(byId.values())
+                .filter(e => e.files && e.files.length > 0)
+                .sort((a, b) => {
+                    const ta = typeof a.completedAt === 'number' ? a.completedAt : new Date(a.completedAt || 0).getTime() / 1000;
+                    const tb = typeof b.completedAt === 'number' ? b.completedAt : new Date(b.completedAt || 0).getTime() / 1000;
+                    return tb - ta;
+                });
+
+            // Save merged back to localStorage
+            saveHistory(entries.map(e => ({
+                ...e, completedAt: e.completedAt || new Date().toISOString()
+            })));
+
+            const section = document.getElementById('historySection');
+            const list    = document.getElementById('historyList');
+
+            if (entries.length === 0) { section.style.display = 'none'; list.innerHTML = ''; return; }
 
             section.style.display = 'block';
             list.innerHTML = '';
@@ -2247,7 +2007,7 @@
                 div.className = 'history-entry';
 
                 const authorPart = entry.author ? `${escapeHtml(entry.author)} · ` : '';
-                const datePart = formatHistoryDate(entry.completedAt);
+                const datePart   = formatHistoryDate(entry.completedAt);
 
                 div.innerHTML = `
                     <div class="history-entry-header">
@@ -2259,76 +2019,35 @@
 
                 list.appendChild(div);
 
-                // Render file links (check availability asynchronously)
                 const filesContainer = div.querySelector('.history-entry-files');
-                for (const filename of entry.files) {
-                    const url = `/api/download/${entry.jobId}/${encodeURIComponent(filename)}`;
-                    const pill = document.createElement('span');
-                    pill.innerHTML = renderFilePill(filename, url, null); // null = loading
-                    filesContainer.appendChild(pill);
-
-                    // Check if file is still available
-                    checkFileAvailable(url).then(available => {
-                        pill.innerHTML = renderFilePill(filename, url, available);
-                    });
+                for (const filename of (entry.files || [])) {
+                    const url  = `/api/download/${entry.jobId}/${encodeURIComponent(filename)}`;
+                    const span = document.createElement('span');
+                    span.innerHTML = renderFilePill(filename, url, null);
+                    filesContainer.appendChild(span);
+                    checkFileAvailable(url).then(ok => { span.innerHTML = renderFilePill(filename, url, ok); });
                 }
             }
         }
 
         function renderFilePill(filename, url, available) {
-            if (available === null) {
-                // Still checking — show as a normal link for now
-                return `<a class="history-file-link" href="${url}" download>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    ${escapeHtml(filename)}
-                </a>`;
-            } else if (available) {
-                return `<a class="history-file-link" href="${url}" download>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    ${escapeHtml(filename)}
-                </a>`;
-            } else {
-                return `<span class="history-file-expired">
-                    <span class="filename">${escapeHtml(filename)}</span>
-                    <span class="expired-badge">Expired</span>
-                </span>`;
+            const dlIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+            if (available !== false) {
+                return `<a class="history-file-link" href="${url}" download>${dlIcon} ${escapeHtml(filename)}</a>`;
             }
+            return `<span class="history-file-expired"><span class="filename">${escapeHtml(filename)}</span><span class="expired-badge">Expired</span></span>`;
         }
 
         async function checkFileAvailable(url) {
-            try {
-                const res = await fetch(url, { method: 'HEAD' });
-                return res.ok;
-            } catch {
-                return false;
-            }
+            try { return (await fetch(url, { method: 'HEAD' })).ok; }
+            catch { return false; }
         }
 
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
-
-        // Wire up Clear button
         document.getElementById('historyClearBtn').addEventListener('click', () => {
-            if (confirm('Clear all conversion history?')) {
-                clearHistory();
-            }
+            if (confirm('Clear all conversion history?')) clearHistory();
         });
 
-        // Render history on page load
         renderHistory();
-
-        // ────────────────────────────────────────────────────────────────────
-
-        function clearError() {
-            errorText.textContent = '';
-        }
     </script>
 </body>
 </html>
