@@ -15,6 +15,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 import lameenc
 import numpy as np
 
@@ -108,6 +109,7 @@ async def cleanup_loop():
 
 
 app = FastAPI(title="Inkvoice")
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
 @app.on_event("startup")

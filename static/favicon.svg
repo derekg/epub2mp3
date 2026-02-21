@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Book body -->
+  <rect x="5" y="4" width="15" height="20" rx="2" fill="#1a1a1a"/>
+  <rect x="6" y="5" width="13" height="18" rx="1" fill="#f5f0e8"/>
+  <!-- Book spine -->
+  <rect x="4" y="4" width="3" height="20" rx="1" fill="#444"/>
+  <!-- Sound waves -->
+  <path d="M22 13 Q25 16 22 19" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M24 10.5 Q29 16 24 21.5" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" fill="none"/>
+</svg>
