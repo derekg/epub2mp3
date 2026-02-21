@@ -35,7 +35,92 @@ jobs: dict = {}
 if is_tts_available():
     load_model()
 
+# ---------------------------------------------------------------------------
+# Cleanup constants
+# ---------------------------------------------------------------------------
+CLEANUP_INTERVAL_SECONDS = 10 * 60          # Run cleanup loop every 10 minutes
+JOB_TTL_SECONDS = 60 * 60                   # Remove completed/error jobs after 1 hour
+ORPHAN_TTL_SECONDS = 2 * 60 * 60           # Remove orphaned temp dirs after 2 hours
+EPUB2MP3_TMP_PREFIX = "epub2mp3_"           # Prefix used by tempfile.mkdtemp calls
+
+
+def _cleanup_orphaned_tmp_dirs(max_age_seconds: int = ORPHAN_TTL_SECONDS) -> int:
+    """Delete orphaned /tmp/epub2mp3_* directories older than *max_age_seconds*.
+
+    Returns the number of directories removed.
+    """
+    tmp = Path(tempfile.gettempdir())
+    now = time.time()
+    removed = 0
+    for entry in tmp.iterdir():
+        if not entry.name.startswith(EPUB2MP3_TMP_PREFIX):
+            continue
+        try:
+            age = now - entry.stat().st_mtime
+            if age > max_age_seconds:
+                shutil.rmtree(entry, ignore_errors=True)
+                removed += 1
+        except Exception:
+            pass
+    return removed
+
+
+def _cleanup_stale_jobs(max_age_seconds: int = JOB_TTL_SECONDS) -> int:
+    """Remove jobs whose status is complete/error/cancelled and whose
+    completion time is older than *max_age_seconds*.
+
+    Returns the number of jobs removed.
+    """
+    now = time.time()
+    to_delete = []
+    for job_id, job in jobs.items():
+        if job.get("status") not in ("complete", "error", "cancelled"):
+            continue
+        completed_at = job.get("completed_at")
+        if completed_at is None:
+            continue
+        if now - completed_at > max_age_seconds:
+            to_delete.append(job_id)
+
+    for job_id in to_delete:
+        job = jobs.pop(job_id)
+        job_dir = job.get("job_dir")
+        if job_dir:
+            shutil.rmtree(job_dir, ignore_errors=True)
+
+    return len(to_delete)
+
+
+async def cleanup_loop():
+    """Background task: periodically clean up old jobs and orphaned temp dirs."""
+    while True:
+        await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
+        try:
+            jobs_removed = _cleanup_stale_jobs()
+            dirs_removed = _cleanup_orphaned_tmp_dirs()
+            if jobs_removed or dirs_removed:
+                print(
+                    f"[cleanup] Cleaned up {jobs_removed} completed jobs, "
+                    f"{dirs_removed} orphaned temp dirs"
+                )
+        except Exception as exc:
+            print(f"[cleanup] Error during periodic cleanup: {exc}")
+
+
 app = FastAPI(title="Inkvoice")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Run one-time stale dir cleanup and start the background cleanup loop."""
+    # One-time cleanup of crash leftovers
+    dirs_removed = _cleanup_orphaned_tmp_dirs(max_age_seconds=ORPHAN_TTL_SECONDS)
+    if dirs_removed:
+        print(f"[cleanup] Startup: removed {dirs_removed} stale epub2mp3 temp dirs")
+
+    # Launch background cleanup loop
+    asyncio.create_task(cleanup_loop())
+    print("[cleanup] Background cleanup task started (interval: every 10 min, job TTL: 1 h)")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -123,6 +208,39 @@ async def get_capabilities():
             {"value": "speed", "label": "Speed Read", "description": "~30% summary"},
             {"value": "summary", "label": "Summary", "description": "~10% brief summary"},
         ],
+    }
+
+
+@app.get("/api/stats")
+async def get_stats():
+    """Return aggregate statistics about current jobs and disk usage."""
+    active_statuses = {"processing"}
+    completed_statuses = {"complete", "error", "cancelled"}
+
+    active_jobs = 0
+    completed_jobs = 0
+    total_bytes = 0
+
+    for job in jobs.values():
+        status = job.get("status")
+        if status in active_statuses:
+            active_jobs += 1
+        elif status in completed_statuses:
+            completed_jobs += 1
+
+        job_dir = job.get("job_dir")
+        if job_dir and Path(job_dir).exists():
+            for f in Path(job_dir).rglob("*"):
+                if f.is_file():
+                    try:
+                        total_bytes += f.stat().st_size
+                    except Exception:
+                        pass
+
+    return {
+        "active_jobs": active_jobs,
+        "completed_jobs": completed_jobs,
+        "total_disk_usage_mb": round(total_bytes / (1024 * 1024), 2),
     }
 
 
@@ -265,6 +383,7 @@ async def start_conversion(
         "output_dir": job_dir / "output",
         "job_dir": job_dir,
         "files": [],
+        "completed_at": None,
         # Detailed progress info
         "details": {
             "chapter_current": 0,
@@ -325,12 +444,14 @@ async def run_conversion(
         )
 
         job["status"] = "complete"
+        job["completed_at"] = time.time()
         job["files"] = [Path(f).name for f in output_files]
         job["progress"] = 100
         job["message"] = "Conversion complete!"
 
     except Exception as e:
         job["status"] = "error"
+        job["completed_at"] = time.time()
         job["message"] = str(e)
         job["progress"] = 0
 
