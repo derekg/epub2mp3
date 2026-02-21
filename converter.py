@@ -469,7 +469,7 @@ def text_to_audio(text: str, voice: str = DEFAULT_VOICE, speed: float = 1.0) -> 
     return generate_speech(text, voice, speed=speed)
 
 
-def convert_wav_to_mp3(wav_data: np.ndarray, sample_rate: int, output_path: str):
+def convert_wav_to_mp3(wav_data: np.ndarray, sample_rate: int, output_path: str, bitrate: int = 192):
     """Convert WAV numpy array to MP3 file using lameenc."""
     # Normalize to int16
     if wav_data.dtype != np.int16:
@@ -477,7 +477,7 @@ def convert_wav_to_mp3(wav_data: np.ndarray, sample_rate: int, output_path: str)
 
     # Set up encoder
     encoder = lameenc.Encoder()
-    encoder.set_bit_rate(192)
+    encoder.set_bit_rate(bitrate)
     encoder.set_in_sample_rate(sample_rate)
     encoder.set_out_sample_rate(sample_rate)
     encoder.set_channels(1)
@@ -552,6 +552,7 @@ def convert_epub_to_mp3(
     output_format: str = "mp3",
     text_processing: str = "none",
     speed: float = 1.0,
+    bitrate: int = 192,
 ) -> list[str]:
     """
     Convert an EPUB file to audio files (MP3 or M4B) using Pocket TTS.
@@ -721,7 +722,7 @@ def convert_epub_to_mp3(
                 audio = np.array([])
 
             if len(audio) > 0:
-                convert_wav_to_mp3(audio, sample_rate, str(output_path))
+                convert_wav_to_mp3(audio, sample_rate, str(output_path), bitrate)
                 add_id3_tags(
                     str(output_path),
                     title=title,
@@ -857,7 +858,7 @@ def convert_epub_to_mp3(
                         "words_total": total_words,
                     })
 
-                convert_wav_to_mp3(combined_audio, sample_rate, str(output_path))
+                convert_wav_to_mp3(combined_audio, sample_rate, str(output_path), bitrate)
                 add_id3_tags(
                     str(output_path),
                     title=book.title,

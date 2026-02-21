@@ -1269,6 +1269,18 @@
             </div>
 
             <div class="option-group">
+                <div class="option-group-title">Audio quality</div>
+                <div class="option-row">
+                    <select id="bitrateSelect">
+                        <option value="64">64 kbps — small file</option>
+                        <option value="128">128 kbps — standard</option>
+                        <option value="192" selected>192 kbps — high quality</option>
+                    </select>
+                </div>
+                <div class="processing-note" id="bitrateNote"></div>
+            </div>
+
+            <div class="option-group">
                 <div class="option-group-title">Text processing</div>
                 <div class="option-row">
                     <select id="textProcessingSelect">
@@ -1390,6 +1402,7 @@
         const optionsCard = document.getElementById('optionsCard');
         const voiceSelect = document.getElementById('voiceSelect');
         const formatSelect = document.getElementById('formatSelect');
+        const bitrateSelect = document.getElementById('bitrateSelect');
         const m4bOption = document.getElementById('m4bOption');
         const textProcessingSelect = document.getElementById('textProcessingSelect');
         const processingNote = document.getElementById('processingNote');
@@ -1753,6 +1766,26 @@
         });
 
         // Format change
+        // Update bitrate file size estimate
+        function updateBitrateNote() {
+            const selected = getSelectedChapters();
+            const words = selected.length > 0
+                ? selected.reduce((sum, i) => sum + chapters[i].words, 0)
+                : 0;
+            const mins = words / 150;
+            const bitrate = parseInt(bitrateSelect.value);
+            const sizeMB = (bitrate * 1000 / 8 * mins * 60) / (1024 * 1024);
+            const note = document.getElementById('bitrateNote');
+            if (mins > 0) {
+                note.textContent = `Estimated file size: ~${sizeMB.toFixed(0)} MB for ~${Math.round(mins)} min of audio`;
+                note.style.display = 'block';
+            } else {
+                note.style.display = 'none';
+            }
+        }
+
+        bitrateSelect.addEventListener('change', updateBitrateNote);
+
         formatSelect.addEventListener('change', () => {
             const isM4B = formatSelect.value === 'm4b';
             perChapterOption.style.opacity = isM4B ? '0.5' : '1';
@@ -1867,6 +1900,7 @@
                 dropZone.querySelector('.drop-zone-hint').textContent = 'Click to change';
 
                 renderChapters();
+                updateBitrateNote();
                 chaptersCard.style.display = 'block';
                 optionsCard.style.display = 'block';
 
@@ -1909,6 +1943,7 @@
                 chapterList.appendChild(div);
             });
             updateSelectionStats();
+            updateBitrateNote();
         }
 
         function updateSelectionStats() {
@@ -2007,6 +2042,7 @@
             formData.append('text_processing', textProcessingSelect.value);
             const speedSelected = document.querySelector('input[name="speed"]:checked');
             formData.append('speed', speedSelected ? speedSelected.value : '1.0');
+            formData.append('bitrate', bitrateSelect.value);
 
             try {
                 const response = await fetch('/api/convert', {

@@ -333,6 +333,7 @@ async def start_conversion(
     output_format: str = Form("mp3"),  # mp3 or m4b
     text_processing: str = Form("none"),  # none, clean, speed, summary
     speed: float = Form(1.0),  # Playback speed multiplier
+    bitrate: int = Form(192),  # MP3 bitrate: 64, 128, 192
     epub_file: UploadFile = File(None),  # For backwards compatibility
 ):
     """Start EPUB to audio conversion (MP3 or M4B) using Pocket TTS."""
@@ -409,7 +410,7 @@ async def start_conversion(
 
     # Run conversion in background
     task = asyncio.create_task(run_conversion(
-        job_id, epub_path, voice, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format, text_processing, speed
+        job_id, epub_path, voice, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format, text_processing, speed, bitrate
     ))
     jobs[job_id]["task"] = task
 
@@ -427,6 +428,7 @@ async def run_conversion(
     output_format: str = "mp3",
     text_processing: str = "none",
     speed: float = 1.0,
+    bitrate: int = 192,
 ):
     """Run the conversion in the background using Pocket TTS."""
     job = jobs[job_id]
@@ -451,6 +453,7 @@ async def run_conversion(
             output_format,
             text_processing,
             speed,
+            bitrate,
         )
 
         job["status"] = "complete"
