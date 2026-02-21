@@ -7,6 +7,12 @@ Uses predefined voice embeddings from HuggingFace.
 import numpy as np
 from typing import Callable
 
+try:
+    from scipy.signal import resample as scipy_resample
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+
 # Try to import pocket-tts
 try:
     from pocket_tts import TTSModel
@@ -100,10 +106,48 @@ def get_voice_list() -> list[dict]:
     return voices
 
 
+
+def _resample_audio(audio: np.ndarray, speed: float, sample_rate: int) -> np.ndarray:
+    """
+    Resample audio to change playback speed without altering pitch.
+
+    speed > 1.0 speeds up (shortens), speed < 1.0 slows down (lengthens).
+    Uses scipy.signal.resample when available, falls back to numpy linear
+    interpolation.
+    """
+    if abs(speed - 1.0) < 0.001:
+        return audio  # No change needed
+
+    original_len = len(audio)
+    target_len = int(round(original_len / speed))
+
+    if target_len == 0:
+        return audio
+
+    dtype = audio.dtype
+    # Work in float64 for precision
+    audio_f = audio.astype(np.float64)
+
+    if SCIPY_AVAILABLE:
+        resampled = scipy_resample(audio_f, target_len)
+    else:
+        # Linear interpolation fallback
+        old_indices = np.linspace(0, original_len - 1, original_len)
+        new_indices = np.linspace(0, original_len - 1, target_len)
+        resampled = np.interp(new_indices, old_indices, audio_f)
+
+    # Clip and convert back to original dtype
+    if np.issubdtype(dtype, np.integer):
+        info = np.iinfo(dtype)
+        resampled = np.clip(resampled, info.min, info.max)
+    return resampled.astype(dtype)
+
+
 def generate_speech(
     text: str,
     voice: str = DEFAULT_VOICE,
     progress_callback: Callable[[str], None] = None,
+    speed: float = 1.0,
 ) -> tuple[np.ndarray, int]:
     """
     Generate speech audio from text using Pocket TTS.
@@ -112,6 +156,9 @@ def generate_speech(
         text: Text to convert to speech
         voice: Voice name (default: alba)
         progress_callback: Optional callback for progress updates
+        speed: Playback speed multiplier (0.75, 1.0, 1.25, 1.5, 2.0).
+               Implemented via resampling since Pocket TTS has no native
+               speed control.
 
     Returns:
         Tuple of (audio numpy array int16, sample rate)
@@ -142,6 +189,10 @@ def generate_speech(
             audio_np = (audio_np * 32767).astype(np.int16)
         else:
             audio_np = audio_np.astype(np.int16)
+
+    # Apply speed adjustment via resampling
+    if abs(speed - 1.0) >= 0.001:
+        audio_np = _resample_audio(audio_np, speed, SAMPLE_RATE)
 
     return audio_np, SAMPLE_RATE
 

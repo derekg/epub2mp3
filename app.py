@@ -332,9 +332,10 @@ async def start_conversion(
     announce_chapters: bool = Form(False),  # Chapter announcements
     output_format: str = Form("mp3"),  # mp3 or m4b
     text_processing: str = Form("none"),  # none, clean, speed, summary
+    speed: float = Form(1.0),  # Playback speed multiplier
     epub_file: UploadFile = File(None),  # For backwards compatibility
 ):
-    """Start EPUB to audio conversion (MP3 or M4B) using Gemini TTS."""
+    """Start EPUB to audio conversion (MP3 or M4B) using Pocket TTS."""
     # Check TTS availability
     if not is_tts_available():
         raise HTTPException(status_code=503, detail="Gemini TTS not configured. Set GEMINI_API_KEY environment variable.")
@@ -400,9 +401,15 @@ async def start_conversion(
     if text_processing not in ("none", "clean", "speed", "summary"):
         text_processing = "none"
 
+    # Validate speed — clamp to supported range
+    valid_speeds = {0.75, 1.0, 1.25, 1.5, 2.0}
+    allowed = sorted(valid_speeds)
+    # Pick the closest valid speed
+    speed = min(allowed, key=lambda s: abs(s - speed))
+
     # Run conversion in background
     task = asyncio.create_task(run_conversion(
-        job_id, epub_path, voice, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format, text_processing
+        job_id, epub_path, voice, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format, text_processing, speed
     ))
     jobs[job_id]["task"] = task
 
@@ -419,8 +426,9 @@ async def run_conversion(
     announce_chapters: bool = False,
     output_format: str = "mp3",
     text_processing: str = "none",
+    speed: float = 1.0,
 ):
-    """Run the conversion in the background using Gemini TTS."""
+    """Run the conversion in the background using Pocket TTS."""
     job = jobs[job_id]
 
     def progress_callback(current: int, total: int, message: str, details: dict = None):
@@ -442,6 +450,7 @@ async def run_conversion(
             announce_chapters,
             output_format,
             text_processing,
+            speed,
         )
 
         job["status"] = "complete"

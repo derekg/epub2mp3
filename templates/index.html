@@ -455,6 +455,48 @@
             color: var(--text-secondary);
         }
 
+
+        /* Speed segmented control */
+        .speed-control {
+            display: flex;
+            gap: 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .speed-control input[type="radio"] {
+            display: none;
+        }
+
+        .speed-control label {
+            flex: 1;
+            text-align: center;
+            padding: 8px 4px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: var(--surface);
+            cursor: pointer;
+            border-right: 1px solid var(--border);
+            transition: background 0.15s, color 0.15s;
+            user-select: none;
+        }
+
+        .speed-control label:last-of-type {
+            border-right: none;
+        }
+
+        .speed-control input[type="radio"]:checked + label {
+            background: var(--accent);
+            color: var(--surface);
+        }
+
+        .speed-control label:hover:not(.speed-control input[type="radio"]:checked + label) {
+            background: var(--bg);
+            color: var(--text);
+        }
+
         /* Buttons */
         .convert-btn {
             width: 100%;
@@ -903,6 +945,25 @@
                     </select>
                 </div>
                 <div class="processing-note" id="processingNote" style="display: none;"></div>
+            </div>
+
+
+            <div class="option-group">
+                <div class="option-group-title">Narration speed</div>
+                <div class="option-row">
+                    <div class="speed-control">
+                        <input type="radio" name="speed" id="speed075" value="0.75">
+                        <label for="speed075">0.75×</label>
+                        <input type="radio" name="speed" id="speed100" value="1.0" checked>
+                        <label for="speed100">1×</label>
+                        <input type="radio" name="speed" id="speed125" value="1.25">
+                        <label for="speed125">1.25×</label>
+                        <input type="radio" name="speed" id="speed150" value="1.5">
+                        <label for="speed150">1.5×</label>
+                        <input type="radio" name="speed" id="speed200" value="2.0">
+                        <label for="speed200">2×</label>
+                    </div>
+                </div>
             </div>
 
             <div class="option-group">
@@ -1434,6 +1495,8 @@
             formData.append('per_chapter', perChapter.checked);
             formData.append('announce_chapters', announceChapters.checked);
             formData.append('text_processing', textProcessingSelect.value);
+            const speedSelected = document.querySelector('input[name="speed"]:checked');
+            formData.append('speed', speedSelected ? speedSelected.value : '1.0');
 
             try {
                 const response = await fetch('/api/convert', {
