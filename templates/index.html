@@ -617,6 +617,121 @@
             text-decoration: underline;
         }
 
+
+        /* History */
+        .history-section {
+            margin-top: 48px;
+        }
+
+        .history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .history-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .history-clear-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8rem;
+            padding: 0;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+
+        .history-clear-btn:hover {
+            color: var(--error);
+        }
+
+        .history-entry {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin-bottom: 12px;
+        }
+
+        .history-entry-header {
+            margin-bottom: 12px;
+        }
+
+        .history-entry-title {
+            font-family: 'Crimson Pro', Georgia, serif;
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: var(--text);
+            line-height: 1.3;
+        }
+
+        .history-entry-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .history-entry-files {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .history-file-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.82rem;
+            color: var(--accent);
+            text-decoration: none;
+            padding: 4px 10px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            background: var(--bg);
+            transition: all 0.15s;
+        }
+
+        .history-file-link:hover {
+            border-color: var(--accent);
+            background: var(--surface);
+        }
+
+        .history-file-expired {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 5px;
+            background: var(--bg);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .history-file-expired .filename {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+
+        .expired-badge {
+            font-size: 0.65rem;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: var(--border);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+        }
+
         /* Mobile */
         @media (max-width: 480px) {
             .container { padding: 32px 16px; }
@@ -784,6 +899,16 @@
                 <button class="download-all-btn" id="downloadAllBtn">Download all as ZIP</button>
             </div>
         </div>
+
+    <!-- Job History -->
+    <div class="history-section" id="historySection" style="display:none;">
+        <div class="history-header">
+            <span class="history-title">Recent Conversions</span>
+            <button class="history-clear-btn" id="historyClearBtn">Clear history</button>
+        </div>
+        <div id="historyList"></div>
+    </div>
+
     </div>
 
     <footer>
@@ -1240,6 +1365,15 @@
             convertBtn.textContent = `Convert to ${formatSelect.value.toUpperCase()}`;
 
             downloadList.innerHTML = '';
+
+            // Save to history
+            addHistoryEntry({
+                jobId,
+                title: bookTitle.textContent || 'Unknown title',
+                author: (bookAuthor.textContent || '').replace(/^by /, ''),
+                files: files,
+                completedAt: new Date().toISOString(),
+            });
             files.forEach(file => {
                 const li = document.createElement('li');
                 li.innerHTML = `
@@ -1261,6 +1395,148 @@
             convertBtn.disabled = false;
             progressSection.style.display = 'none';
         }
+
+
+        // ── Job History (localStorage) ──────────────────────────────────────
+
+        const HISTORY_KEY = 'inkvoice_history';
+        const HISTORY_MAX = 10;
+
+        function loadHistory() {
+            try {
+                return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+            } catch {
+                return [];
+            }
+        }
+
+        function saveHistory(entries) {
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
+        }
+
+        function addHistoryEntry(entry) {
+            const entries = loadHistory();
+            // Deduplicate by jobId
+            const filtered = entries.filter(e => e.jobId !== entry.jobId);
+            // Prepend newest, cap at HISTORY_MAX
+            filtered.unshift(entry);
+            saveHistory(filtered.slice(0, HISTORY_MAX));
+            renderHistory();
+        }
+
+        function clearHistory() {
+            localStorage.removeItem(HISTORY_KEY);
+            renderHistory();
+        }
+
+        function formatHistoryDate(isoString) {
+            try {
+                const d = new Date(isoString);
+                return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                    + ' at '
+                    + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+            } catch {
+                return isoString;
+            }
+        }
+
+        async function renderHistory() {
+            const entries = loadHistory();
+            const section = document.getElementById('historySection');
+            const list = document.getElementById('historyList');
+
+            if (entries.length === 0) {
+                section.style.display = 'none';
+                list.innerHTML = '';
+                return;
+            }
+
+            section.style.display = 'block';
+            list.innerHTML = '';
+
+            for (const entry of entries) {
+                const div = document.createElement('div');
+                div.className = 'history-entry';
+
+                const authorPart = entry.author ? `${escapeHtml(entry.author)} · ` : '';
+                const datePart = formatHistoryDate(entry.completedAt);
+
+                div.innerHTML = `
+                    <div class="history-entry-header">
+                        <div class="history-entry-title">${escapeHtml(entry.title)}</div>
+                        <div class="history-entry-meta">${authorPart}${datePart}</div>
+                    </div>
+                    <div class="history-entry-files" data-jobid="${entry.jobId}"></div>
+                `;
+
+                list.appendChild(div);
+
+                // Render file links (check availability asynchronously)
+                const filesContainer = div.querySelector('.history-entry-files');
+                for (const filename of entry.files) {
+                    const url = `/api/download/${entry.jobId}/${encodeURIComponent(filename)}`;
+                    const pill = document.createElement('span');
+                    pill.innerHTML = renderFilePill(filename, url, null); // null = loading
+                    filesContainer.appendChild(pill);
+
+                    // Check if file is still available
+                    checkFileAvailable(url).then(available => {
+                        pill.innerHTML = renderFilePill(filename, url, available);
+                    });
+                }
+            }
+        }
+
+        function renderFilePill(filename, url, available) {
+            if (available === null) {
+                // Still checking — show as a normal link for now
+                return `<a class="history-file-link" href="${url}" download>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    ${escapeHtml(filename)}
+                </a>`;
+            } else if (available) {
+                return `<a class="history-file-link" href="${url}" download>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    ${escapeHtml(filename)}
+                </a>`;
+            } else {
+                return `<span class="history-file-expired">
+                    <span class="filename">${escapeHtml(filename)}</span>
+                    <span class="expired-badge">Expired</span>
+                </span>`;
+            }
+        }
+
+        async function checkFileAvailable(url) {
+            try {
+                const res = await fetch(url, { method: 'HEAD' });
+                return res.ok;
+            } catch {
+                return false;
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // Wire up Clear button
+        document.getElementById('historyClearBtn').addEventListener('click', () => {
+            if (confirm('Clear all conversion history?')) {
+                clearHistory();
+            }
+        });
+
+        // Render history on page load
+        renderHistory();
+
+        // ────────────────────────────────────────────────────────────────────
 
         function clearError() {
             errorText.textContent = '';
