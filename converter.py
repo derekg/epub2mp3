@@ -455,13 +455,18 @@ def create_m4b_with_chapters(
             return (False, f"ffmpeg exception: {e}")
 
 
-def text_to_audio(text: str, voice: str = DEFAULT_VOICE) -> tuple[np.ndarray, int]:
+def text_to_audio(text: str, voice: str = DEFAULT_VOICE, speed: float = 1.0) -> tuple[np.ndarray, int]:
     """
-    Convert text to audio using Gemini TTS.
+    Convert text to audio using Pocket TTS.
+
+    Args:
+        text: Text to synthesize.
+        voice: Voice name.
+        speed: Playback speed multiplier (e.g. 0.75, 1.0, 1.5, 2.0).
 
     Returns tuple of (audio numpy array, sample rate).
     """
-    return generate_speech(text, voice)
+    return generate_speech(text, voice, speed=speed)
 
 
 def convert_wav_to_mp3(wav_data: np.ndarray, sample_rate: int, output_path: str):
@@ -546,14 +551,15 @@ def convert_epub_to_mp3(
     announce_chapters: bool = False,
     output_format: str = "mp3",
     text_processing: str = "none",
+    speed: float = 1.0,
 ) -> list[str]:
     """
-    Convert an EPUB file to audio files (MP3 or M4B) using Gemini TTS.
+    Convert an EPUB file to audio files (MP3 or M4B) using Pocket TTS.
 
     Args:
         epub_path: Path to the EPUB file
         output_dir: Directory to save audio files
-        voice: Gemini TTS voice name (default: Charon)
+        voice: Voice name (default: alba)
         per_chapter: If True, create one file per chapter; otherwise combine all
         progress_callback: Function(current, total, message, details) for progress updates
             details dict can include: chapter_current, chapter_total, chapter_title,
@@ -563,6 +569,7 @@ def convert_epub_to_mp3(
         announce_chapters: If True, speak chapter title at start of each chapter
         output_format: "mp3" or "m4b" (M4B requires ffmpeg, creates single file with chapters)
         text_processing: "none", "clean", "speed", or "summary" (uses Gemini)
+        speed: Playback speed multiplier (0.75, 1.0, 1.25, 1.5, 2.0). Default 1.0.
 
     Returns:
         List of paths to generated audio files
@@ -695,7 +702,7 @@ def convert_epub_to_mp3(
             chapter_audio_parts = []
             if announce_chapters:
                 announcement_text = f"Chapter {idx + 1}. {title}."
-                announcement, _ = text_to_audio(announcement_text, voice)
+                announcement, _ = text_to_audio(announcement_text, voice, speed=speed)
                 if len(announcement) > 0:
                     chapter_audio_parts.append(announcement)
                     # Add a brief pause after announcement
@@ -703,7 +710,7 @@ def convert_epub_to_mp3(
                     chapter_audio_parts.append(pause)
 
             # Generate chapter content audio
-            content_audio, _ = text_to_audio(text, voice)
+            content_audio, _ = text_to_audio(text, voice, speed=speed)
             if len(content_audio) > 0:
                 chapter_audio_parts.append(content_audio)
 
@@ -778,14 +785,14 @@ def convert_epub_to_mp3(
             # Generate chapter announcement if enabled
             if announce_chapters:
                 announcement_text = f"Chapter {idx + 1}. {title}."
-                announcement, _ = text_to_audio(announcement_text, voice)
+                announcement, _ = text_to_audio(announcement_text, voice, speed=speed)
                 if len(announcement) > 0:
                     chapter_audio_parts.append(announcement)
                     # Add a brief pause after announcement
                     pause = np.zeros(int(sample_rate * 0.8), dtype=announcement.dtype)
                     chapter_audio_parts.append(pause)
 
-            content_audio, _ = text_to_audio(text, voice)
+            content_audio, _ = text_to_audio(text, voice, speed=speed)
             if len(content_audio) > 0:
                 chapter_audio_parts.append(content_audio)
 
