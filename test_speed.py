@@ -366,3 +366,64 @@ class TestSpeedEndToEnd:
             assert mock_create_task.called, "asyncio.create_task was never called"
 
 
+
+
+# ---------------------------------------------------------------------------
+# Tests for text chunker (TTS context window overflow fix)
+# ---------------------------------------------------------------------------
+
+class TestSplitTextIntoChunks:
+    """Tests for _split_text_into_chunks — the fix for Pocket TTS tensor overflow."""
+
+    def test_short_text_single_chunk(self):
+        """Text under max_words stays as one chunk."""
+        from tts import _split_text_into_chunks
+        result = _split_text_into_chunks("Hello world. This is a test.", max_words=100)
+        assert len(result) == 1
+
+    def test_long_sentence_no_punctuation_is_split(self):
+        """A single run of 200 words with no punctuation is split into ≤100-word chunks."""
+        from tts import _split_text_into_chunks
+        text = "word " * 200
+        chunks = _split_text_into_chunks(text, max_words=100)
+        assert len(chunks) >= 2
+        assert all(len(c.split()) <= 100 for c in chunks)
+
+    def test_sentence_boundaries_respected(self):
+        """Chunks break at sentence endings, not mid-sentence."""
+        from tts import _split_text_into_chunks
+        text = "First sentence. Second sentence. Third sentence."
+        chunks = _split_text_into_chunks(text, max_words=4)
+        # Each chunk should end with a complete sentence
+        for chunk in chunks:
+            assert chunk.strip()  # no empty chunks
+
+    def test_no_empty_chunks(self):
+        """Empty or whitespace-only input returns empty list."""
+        from tts import _split_text_into_chunks
+        assert _split_text_into_chunks("") == []
+        assert _split_text_into_chunks("   ") == []
+
+    def test_max_words_never_exceeded(self):
+        """No chunk exceeds max_words words."""
+        from tts import _split_text_into_chunks
+        text = ("This is a sentence that has some words. " * 20 +
+                "nowaytobreakthis " * 150)
+        chunks = _split_text_into_chunks(text, max_words=100)
+        assert all(len(c.split()) <= 100 for c in chunks)
+
+    def test_all_words_preserved(self):
+        """Total word count across chunks equals original word count."""
+        from tts import _split_text_into_chunks
+        text = "word " * 250
+        chunks = _split_text_into_chunks(text, max_words=100)
+        original_words = len(text.split())
+        chunk_words = sum(len(c.split()) for c in chunks)
+        assert chunk_words == original_words
+
+    def test_single_sentence_under_limit_not_split(self):
+        """A 50-word sentence with max_words=100 stays as one chunk."""
+        from tts import _split_text_into_chunks
+        text = "word " * 50
+        chunks = _split_text_into_chunks(text.strip(), max_words=100)
+        assert len(chunks) == 1

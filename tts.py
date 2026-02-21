@@ -143,6 +143,72 @@ def _resample_audio(audio: np.ndarray, speed: float, sample_rate: int) -> np.nda
     return resampled.astype(dtype)
 
 
+# Max words per chunk passed to model.generate_audio().
+# Pocket TTS internally sequences at 1000 audio frames; long sentences with no
+# punctuation can exceed this. Keeping chunks at ≤100 words stays comfortably
+# within the limit (the model's own sentence splitter targets ~27 words/chunk).
+_MAX_WORDS_PER_CHUNK = 100
+
+
+def _split_text_into_chunks(text: str, max_words: int = _MAX_WORDS_PER_CHUNK) -> list[str]:
+    """
+    Split text into chunks of at most max_words words, breaking at sentence
+    boundaries where possible and falling back to word boundaries.
+    """
+    import re
+
+    # Split on sentence-ending punctuation, keeping the delimiter
+    sentences = re.split(r'(?<=[.!?;])\s+', text.strip())
+
+    chunks = []
+    current_words = []
+    current_count = 0
+
+    for sentence in sentences:
+        words = sentence.split()
+        if not words:
+            continue
+
+        # If a single sentence is too long, split it at word boundaries
+        if len(words) > max_words:
+            # Flush any pending words first
+            if current_words:
+                chunks.append(' '.join(current_words))
+                current_words = []
+                current_count = 0
+            # Split the long sentence into word-boundary chunks
+            for i in range(0, len(words), max_words):
+                chunks.append(' '.join(words[i:i + max_words]))
+            continue
+
+        if current_count + len(words) > max_words:
+            # Flush current chunk and start fresh
+            if current_words:
+                chunks.append(' '.join(current_words))
+            current_words = words
+            current_count = len(words)
+        else:
+            current_words.extend(words)
+            current_count += len(words)
+
+    if current_words:
+        chunks.append(' '.join(current_words))
+
+    return [c for c in chunks if c.strip()]
+
+
+def _tensor_to_int16(audio_tensor) -> np.ndarray:
+    """Convert a TTS audio tensor to int16 numpy array."""
+    audio_np = audio_tensor.squeeze().numpy()
+    if audio_np.dtype != np.int16:
+        if audio_np.dtype in (np.float32, np.float64):
+            audio_np = np.clip(audio_np, -1.0, 1.0)
+            audio_np = (audio_np * 32767).astype(np.int16)
+        else:
+            audio_np = audio_np.astype(np.int16)
+    return audio_np
+
+
 def generate_speech(
     text: str,
     voice: str = DEFAULT_VOICE,
@@ -177,18 +243,25 @@ def generate_speech(
     # Get voice state
     voice_state = _get_voice_state(voice)
 
-    # Generate audio
-    audio_tensor = model.generate_audio(voice_state, text)
+    # Pre-chunk text to avoid Pocket TTS autoregressive sequence length overflow.
+    # The model hard-limits at 1000 audio frames; long sentences without punctuation
+    # produce a single oversized chunk that crashes generation.
+    chunks = _split_text_into_chunks(text)
 
-    # Convert to numpy int16
-    audio_np = audio_tensor.squeeze().numpy()
-    if audio_np.dtype != np.int16:
-        if audio_np.dtype == np.float32 or audio_np.dtype == np.float64:
-            # Normalize and convert
-            audio_np = np.clip(audio_np, -1.0, 1.0)
-            audio_np = (audio_np * 32767).astype(np.int16)
-        else:
-            audio_np = audio_np.astype(np.int16)
+    # 100ms silence between chunks for natural pacing
+    silence = np.zeros(int(SAMPLE_RATE * 0.1), dtype=np.int16)
+
+    audio_parts = []
+    for chunk in chunks:
+        audio_tensor = model.generate_audio(voice_state, chunk)
+        audio_parts.append(_tensor_to_int16(audio_tensor))
+        if len(chunks) > 1:
+            audio_parts.append(silence)
+
+    if not audio_parts:
+        return np.array([], dtype=np.int16), SAMPLE_RATE
+
+    audio_np = np.concatenate(audio_parts)
 
     # Apply speed adjustment via resampling
     if abs(speed - 1.0) >= 0.001:
