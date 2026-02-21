@@ -296,6 +296,39 @@
             border: 1px solid var(--border);
         }
 
+        /* Duration estimate */
+        .duration-estimate {
+            display: none;
+            margin-top: 16px;
+            padding: 14px 16px;
+            background: var(--bg);
+            border-radius: 8px;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .duration-estimate-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .duration-estimate-value {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .duration-estimate-note {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+            text-align: right;
+        }
+
+        .duration-estimate-right {
+            text-align: right;
+        }
+
         /* Options */
         .options-card { display: none; }
 
@@ -679,6 +712,13 @@
             </div>
 
             <div class="chapter-list" id="chapterList"></div>
+            <div class="duration-estimate" id="durationEstimate">
+                <span class="duration-estimate-label">Estimated listening time</span>
+                <div class="duration-estimate-right">
+                    <div class="duration-estimate-value" id="durationEstimateValue"></div>
+                    <div class="duration-estimate-note" id="durationEstimateNote"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Step 3: Options -->
@@ -837,6 +877,37 @@
         let previewAudio = null;
         let voiceData = [];
 
+        // Duration estimate constants
+        const WORDS_PER_MINUTE = 150;
+        const PROCESSING_MULTIPLIERS = {
+            'none':    1.0,
+            'clean':   1.0,
+            'speed':   0.3,
+            'summary': 0.1,
+        };
+
+        function getProcessingMultiplier() {
+            return PROCESSING_MULTIPLIERS[textProcessingSelect.value] || 1.0;
+        }
+
+        function formatDuration(words, multiplier) {
+            multiplier = multiplier !== undefined ? multiplier : getProcessingMultiplier();
+            const effectiveWords = Math.round(words * multiplier);
+            const totalMins = Math.round(effectiveWords / WORDS_PER_MINUTE);
+            const hours = Math.floor(totalMins / 60);
+            const mins = totalMins % 60;
+            if (hours > 0) return `${hours}h ${mins}m`;
+            return `${totalMins}m`;
+        }
+
+        function formatChapterDuration(words) {
+            const multiplier = getProcessingMultiplier();
+            const effectiveWords = Math.round(words * multiplier);
+            const mins = Math.round(effectiveWords / WORDS_PER_MINUTE);
+            if (mins < 1) return '<1 min';
+            return `~${mins} min`;
+        }
+
         // Icons
         const playIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
         const stopIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>';
@@ -957,6 +1028,13 @@
                     ? 'Gemini extracts main ideas and conclusions'
                     : 'Requires Gemini API';
             }
+            // Re-compute duration estimates when processing mode changes
+            updateSelectionStats();
+            // Refresh per-chapter duration labels
+            chapterList.querySelectorAll('.chapter-item .meta').forEach((meta, i) => {
+                const ch = chapters[i];
+                if (ch) meta.textContent = `${formatWords(ch.words)} · ${formatChapterDuration(ch.words)}`;
+            });
         });
 
         // Format change
@@ -1099,7 +1177,7 @@
                 div.innerHTML = `
                     <input type="checkbox" ${isContent ? 'checked' : ''} data-index="${i}">
                     <span class="title">${ch.title}${badge}</span>
-                    <span class="meta">${formatWords(ch.words)}</span>
+                    <span class="meta">${formatWords(ch.words)} · ${formatChapterDuration(ch.words)}</span>
                 `;
 
                 div.addEventListener('click', (e) => {
@@ -1118,10 +1196,28 @@
         function updateSelectionStats() {
             const selected = getSelectedChapters();
             const words = selected.reduce((sum, i) => sum + chapters[i].words, 0);
-            const mins = Math.round(words / 150);
-            const hours = Math.floor(mins / 60);
-            const duration = hours > 0 ? `${hours}h ${mins % 60}m` : `${mins}m`;
-            selectionStats.textContent = `${selected.length} of ${chapters.length} · ${words.toLocaleString()} words · ~${duration}`;
+            const multiplier = getProcessingMultiplier();
+            const duration = formatDuration(words, multiplier);
+            selectionStats.textContent = `${selected.length} of ${chapters.length} · ${words.toLocaleString()} words`;
+
+            // Update duration estimate banner
+            const durationEstimate = document.getElementById('durationEstimate');
+            const durationEstimateValue = document.getElementById('durationEstimateValue');
+            const durationEstimateNote = document.getElementById('durationEstimateNote');
+            if (words > 0) {
+                durationEstimate.style.display = 'flex';
+                durationEstimateValue.textContent = duration;
+                const mode = textProcessingSelect.value;
+                if (mode === 'speed') {
+                    durationEstimateNote.textContent = 'condensed to ~30%';
+                } else if (mode === 'summary') {
+                    durationEstimateNote.textContent = 'key points only (~10%)';
+                } else {
+                    durationEstimateNote.textContent = '';
+                }
+            } else {
+                durationEstimate.style.display = 'none';
+            }
         }
 
         function formatWords(n) {
