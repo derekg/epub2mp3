@@ -282,9 +282,10 @@ async def start_conversion(
         text_processing = "none"
 
     # Run conversion in background
-    asyncio.create_task(run_conversion(
+    task = asyncio.create_task(run_conversion(
         job_id, epub_path, voice, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format, text_processing
     ))
+    jobs[job_id]["task"] = task
 
     return {"job_id": job_id}
 
@@ -329,10 +330,44 @@ async def run_conversion(
         job["progress"] = 100
         job["message"] = "Conversion complete!"
 
+    except asyncio.CancelledError:
+        job["status"] = "cancelled"
+        job["message"] = "Cancelled"
+        job["progress"] = 0
+        # Clean up temp output directory
+        try:
+            shutil.rmtree(job["output_dir"], ignore_errors=True)
+        except Exception:
+            pass
+        raise  # Re-raise so asyncio knows the task was cancelled
+
     except Exception as e:
         job["status"] = "error"
         job["message"] = str(e)
         job["progress"] = 0
+
+
+
+@app.delete("/api/cancel/{job_id}")
+async def cancel_job(job_id: str):
+    """Cancel an in-progress conversion job."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = jobs[job_id]
+    if job["status"] != "processing":
+        raise HTTPException(status_code=400, detail=f"Job is not in progress (status: {job['status']})")
+
+    task = job.get("task")
+    if task and not task.done():
+        task.cancel()
+
+    # Status will be set to "cancelled" by run_conversion's CancelledError handler,
+    # but set it optimistically here in case the task hasn't been scheduled yet.
+    job["status"] = "cancelled"
+    job["message"] = "Cancelled"
+
+    return {"status": "cancelled"}
 
 
 @app.get("/api/status/{job_id}")
