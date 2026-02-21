@@ -14,12 +14,19 @@ Uses [Pocket TTS](https://kyutai.org/blog/2026-01-13-pocket-tts) for local speec
 - **Voice preview** - Listen to voices before converting
 - **Custom voice cloning** - Use any WAV file to clone a voice (CLI only)
 - **Chapter selection** - Choose which chapters to convert
+- **Estimated listening time** - See duration estimate before converting, updates per chapter selection
+- **Narration speed** - 0.75×, 1×, 1.25×, 1.5×, 2× playback speed
+- **Bitrate selection** - 64 / 128 / 192 kbps output with estimated file size
+- **Multi-job queue** - Convert multiple books in parallel, track all jobs in a sidebar
+- **Cancel conversion** - Stop an in-progress job at any time
+- **Job history** - Completed downloads persist across page refreshes via localStorage
 - **Smart EPUB parsing** - TOC-first parsing with intelligent chapter detection
 - **Front/back matter detection** - Auto-deselects title pages, copyright, acknowledgements
 - **Cover art display** - Shows book cover in the web UI
 - **M4B audiobook format** - Single file with embedded chapter markers (requires ffmpeg)
 - **MP3 with metadata** - ID3 tags with title, author, chapter, and cover art
 - **Chapter announcements** - Optionally speak chapter titles
+- **Auto cleanup** - Completed jobs and temp files cleaned up automatically after 1 hour
 - **AI text processing** - Powered by Gemini 3 Flash:
   - **Narration-ready** - Remove footnotes, URLs, figure references
   - **Condensed** - ~30% shorter while preserving key information
@@ -61,10 +68,12 @@ Open http://localhost:8000 in your browser:
 
 1. Drop an EPUB file (or click to browse)
 2. Select chapters to include (front/back matter auto-deselected)
-3. Choose a voice and click the play button to preview
-4. Pick format: MP3 (per-chapter) or M4B (single file with chapters)
-5. Select text processing mode (narration-ready is default when Gemini is configured)
-6. Click "Convert" and download when complete
+3. See estimated listening time update as you select/deselect chapters
+4. Choose a voice and click the play button to preview
+5. Pick format: MP3 (per-chapter) or M4B (single file with chapters)
+6. Set narration speed, output bitrate, and text processing mode
+7. Click "Convert" — the form resets so you can queue another book while it runs
+8. Download files when complete; history persists across page refreshes
 
 ### Command Line
 
@@ -130,10 +139,11 @@ inkvoice/
 ├── cli.py              # Command-line interface (typer)
 ├── app.py              # FastAPI web server
 ├── converter.py        # EPUB parsing and conversion orchestration
-├── tts.py              # Pocket TTS speech synthesis
+├── tts.py              # Pocket TTS speech synthesis + speed resampling
 ├── text_processor.py   # Gemini-powered text processing
 ├── templates/
 │   └── index.html      # Web UI
+├── test_*.py           # pytest test suite (124 tests)
 └── requirements.txt    # Python dependencies
 ```
 

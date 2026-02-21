@@ -1,0 +1,324 @@
+{
+  "objectives": {
+    "obj_355fbe43": {
+      "id": "obj_355fbe43",
+      "description": "Show estimated audiobook listening time before converting",
+      "user_experience": {
+        "visible": [
+          "Per-chapter duration next to word count (e.g. ~12 min)",
+          "Estimated listening time banner below chapter list",
+          "Note shown when speed read or summary mode is active"
+        ],
+        "behavior": [
+          "Updates dynamically when chapters are selected/deselected",
+          "Adjusts when text processing mode changes (speed=30%, summary=10%)",
+          "Based on 150 words per minute narration rate"
+        ],
+        "performance": [
+          "Instant — pure JS calculation, no server round-trip"
+        ]
+      },
+      "constraints": [],
+      "examples": [],
+      "context": {
+        "existing_files": [
+          "Upload response includes words per chapter and total_words"
+        ],
+        "must_not_change": [],
+        "can_modify": [
+          "templates/index.html"
+        ]
+      },
+      "attempts": [
+        {
+          "approach": "Pure JS: formatDuration(), PROCESSING_MULTIPLIERS, duration banner element, wired to chapter selection and processing mode change events",
+          "timestamp": "2026-02-21T20:12:32.090203Z",
+          "result": "success",
+          "learned": "",
+          "files_changed": [
+            "templates/index.html",
+            "test_duration.py"
+          ]
+        }
+      ],
+      "status": "Complete",
+      "created_at": "2026-02-21T20:12:32.086394Z",
+      "updated_at": "2026-02-21T20:12:32.094130Z"
+    },
+    "obj_25b26988": {
+      "id": "obj_25b26988",
+      "description": "Narration speed control for TTS output (0.75x to 2x)",
+      "user_experience": {
+        "visible": [
+          "Pill-style segmented control: 0.75x 1x 1.25x 1.5x 2x (1x default)"
+        ],
+        "behavior": [
+          "Speed resamples audio via scipy after TTS synthesis",
+          "Falls back to numpy interpolation if scipy unavailable",
+          "Invalid speeds snapped to nearest valid value",
+          "Speed threaded through: UI -> API -> convert_epub_to_mp3 -> generate_speech"
+        ],
+        "performance": [
+          "Resampling adds minimal overhead post-synthesis"
+        ]
+      },
+      "constraints": [],
+      "examples": [],
+      "context": {
+        "existing_files": [
+          "tts.py: generate_speech(), converter.py: text_to_audio(), convert_epub_to_mp3()"
+        ],
+        "must_not_change": [],
+        "can_modify": [
+          "tts.py, converter.py, app.py, templates/index.html"
+        ]
+      },
+      "attempts": [
+        {
+          "approach": "_resample_audio() in tts.py using scipy/numpy, speed param threaded through all layers, pill radio UI, speed validation with nearest-valid snapping",
+          "timestamp": "2026-02-21T20:12:46.711110Z",
+          "result": "success",
+          "learned": "",
+          "files_changed": [
+            "tts.py",
+            "converter.py",
+            "app.py",
+            "templates/index.html",
+            "test_speed.py"
+          ]
+        }
+      ],
+      "status": "Complete",
+      "created_at": "2026-02-21T20:12:46.707239Z",
+      "updated_at": "2026-02-21T20:12:46.714930Z"
+    },
+    "obj_bdfa47cc": {
+      "id": "obj_bdfa47cc",
+      "description": "TTL-based automatic cleanup of temp files and completed jobs",
+      "user_experience": {
+        "visible": [
+          "GET /api/stats shows active_jobs, completed_jobs, total_disk_usage_mb"
+        ],
+        "behavior": [
+          "Background loop runs every 10 minutes",
+          "Removes completed/error/cancelled jobs older than 1 hour",
+          "Cleans orphaned epub2mp3_* temp dirs older than 2 hours",
+          "One-time cleanup of stale dirs on server startup",
+          "completed_at timestamp set on jobs when they finish or error"
+        ],
+        "performance": [
+          "Cleanup runs in background, no impact on request handling"
+        ]
+      },
+      "constraints": [],
+      "examples": [],
+      "context": {
+        "existing_files": [
+          "app.py: jobs dict, job_dir temp paths, existing DELETE /api/cleanup/{id}"
+        ],
+        "must_not_change": [],
+        "can_modify": [
+          "app.py"
+        ]
+      },
+      "attempts": [
+        {
+          "approach": "_cleanup_stale_jobs(), _cleanup_orphaned_tmp_dirs(), cleanup_loop() asyncio background task, startup event, GET /api/stats endpoint, completed_at tracking",
+          "timestamp": "2026-02-21T20:12:59.326912Z",
+          "result": "success",
+          "learned": "",
+          "files_changed": [
+            "app.py",
+            "test_cleanup.py"
+          ]
+        }
+      ],
+      "status": "Complete",
+      "created_at": "2026-02-21T20:12:59.322625Z",
+      "updated_at": "2026-02-21T20:12:59.330563Z"
+    },
+    "obj_bb28cedd": {
+      "id": "obj_bb28cedd",
+      "description": "Cancel button for in-progress EPUB conversions",
+      "user_experience": {
+        "visible": [
+          "Cancel button appears below progress bar during conversion",
+          "Button shows Cancelling... immediately on click",
+          "Button disappears on complete, error, or cancelled"
+        ],
+        "behavior": [
+          "DELETE /api/cancel/{job_id} stops the asyncio task",
+          "CancelledError handler cleans up temp files and sets status=cancelled",
+          "SSE stream surfaces cancelled status to UI",
+          "Cannot cancel a completed or already-cancelled job (400)"
+        ],
+        "performance": [
+          "Cancel feels instant — optimistic UI before server responds"
+        ]
+      },
+      "constraints": [],
+      "examples": [],
+      "context": {
+        "existing_files": [
+          "app.py: jobs dict, run_conversion asyncio task, SSE progress stream"
+        ],
+        "must_not_change": [],
+        "can_modify": [
+          "app.py, templates/index.html"
+        ]
+      },
+      "attempts": [
+        {
+          "approach": "Stored asyncio Task in jobs dict, added DELETE endpoint, CancelledError handler, cancel button in UI",
+          "timestamp": "2026-02-21T20:12:18.677695Z",
+          "result": "success",
+          "learned": "",
+          "files_changed": [
+            "app.py",
+            "templates/index.html",
+            "test_cancel.py"
+          ]
+        }
+      ],
+      "status": "Complete",
+      "created_at": "2026-02-21T20:12:18.673157Z",
+      "updated_at": "2026-02-21T20:12:18.681390Z"
+    },
+    "obj_7aff4add": {
+      "id": "obj_7aff4add",
+      "description": "Multi-job queue panel showing all active and completed conversions",
+      "user_experience": {
+        "visible": [
+          "Jobs sidebar appears when first conversion starts",
+          "Each job card: status dot, title, progress bar, download links",
+          "Form resets after starting conversion so user can queue another book"
+        ],
+        "behavior": [
+          "Each job has independent SSE connection for parallel updates",
+          "New jobs inserted at top of list",
+          "Sidebar stacks below form on narrow screens"
+        ],
+        "performance": [
+          "Multiple jobs update in parallel without blocking each other"
+        ]
+      },
+      "constraints": [],
+      "examples": [],
+      "context": {
+        "existing_files": [
+          "Backend already supports concurrent jobs via jobs dict and SSE per job_id"
+        ],
+        "must_not_change": [],
+        "can_modify": [
+          "templates/index.html"
+        ]
+      },
+      "attempts": [
+        {
+          "approach": "Two-column flex layout, jobs-sidebar with job cards, addJob()/listenForProgress()/updateJobCard()/resetForm() functions, independent EventSource per job",
+          "timestamp": "2026-02-21T20:12:46.723452Z",
+          "result": "success",
+          "learned": "",
+          "files_changed": [
+            "templates/index.html",
+            "test_queue.py"
+          ]
+        }
+      ],
+      "status": "Complete",
+      "created_at": "2026-02-21T20:12:46.718932Z",
+      "updated_at": "2026-02-21T20:12:46.727086Z"
+    },
+    "obj_13a3fc72": {
+      "id": "obj_13a3fc72",
+      "description": "MP3 output bitrate selection (64/128/192 kbps)",
+      "user_experience": {
+        "visible": [
+          "Bitrate dropdown: 64 kbps (small), 128 kbps (standard), 192 kbps (default)",
+          "Estimated file size shown below selector based on duration and bitrate"
+        ],
+        "behavior": [
+          "Bitrate threaded through: UI -> API -> convert_epub_to_mp3 -> convert_wav_to_mp3",
+          "Voice preview encoder stays at 128 kbps regardless"
+        ],
+        "performance": [
+          "No performance impact — just changes lameenc bit rate setting"
+        ]
+      },
+      "constraints": [],
+      "examples": [],
+      "context": {
+        "existing_files": [
+          "converter.py: convert_wav_to_mp3() uses lameenc, hardcoded 192kbps"
+        ],
+        "must_not_change": [],
+        "can_modify": [
+          "converter.py, app.py, templates/index.html"
+        ]
+      },
+      "attempts": [
+        {
+          "approach": "Added bitrate param to convert_wav_to_mp3 and convert_epub_to_mp3, Form field in API, select UI with file size estimator",
+          "timestamp": "2026-02-21T20:12:59.315473Z",
+          "result": "success",
+          "learned": "",
+          "files_changed": [
+            "converter.py",
+            "app.py",
+            "templates/index.html",
+            "test_bitrate.py"
+          ]
+        }
+      ],
+      "status": "Complete",
+      "created_at": "2026-02-21T20:12:59.311179Z",
+      "updated_at": "2026-02-21T20:12:59.318984Z"
+    },
+    "obj_8218ee68": {
+      "id": "obj_8218ee68",
+      "description": "Persist completed job download links via localStorage",
+      "user_experience": {
+        "visible": [
+          "Recent Conversions section below main form after first completion",
+          "Each entry shows title, author, date, download pill buttons",
+          "Expired label on pills when server files are gone",
+          "Clear history button"
+        ],
+        "behavior": [
+          "Saves last 10 completed jobs to localStorage",
+          "HEAD-checks each download URL on render to detect expired files",
+          "History survives page refresh"
+        ],
+        "performance": [
+          "HEAD checks are async and non-blocking"
+        ]
+      },
+      "constraints": [],
+      "examples": [],
+      "context": {
+        "existing_files": [
+          "Download endpoint: GET /api/download/{job_id}/{filename}"
+        ],
+        "must_not_change": [],
+        "can_modify": [
+          "templates/index.html"
+        ]
+      },
+      "attempts": [
+        {
+          "approach": "localStorage JSON array, addHistoryEntry/renderHistory/checkFileAvailable functions, escapeHtml for XSS safety, integrated into showDownloads()",
+          "timestamp": "2026-02-21T20:12:32.102393Z",
+          "result": "success",
+          "learned": "",
+          "files_changed": [
+            "templates/index.html",
+            "test_history.py"
+          ]
+        }
+      ],
+      "status": "Complete",
+      "created_at": "2026-02-21T20:12:32.098376Z",
+      "updated_at": "2026-02-21T20:12:32.105654Z"
+    }
+  }
+}
