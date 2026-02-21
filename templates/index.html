@@ -513,6 +513,31 @@
             margin-top: 4px;
         }
 
+                .cancel-btn {
+            display: none;
+            margin-top: 20px;
+            width: 100%;
+            padding: 10px 20px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .cancel-btn:hover:not(:disabled) {
+            border-color: var(--error);
+            color: var(--error);
+        }
+
+        .cancel-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         /* Downloads */
         .downloads-section {
             display: none;
@@ -773,6 +798,7 @@
                         <div class="progress-detail-label">Words</div>
                     </div>
                 </div>
+                <button class="cancel-btn" id="cancelBtn">Cancel</button>
             </div>
 
             <div class="downloads-section" id="downloadsSection">
@@ -822,6 +848,7 @@
         const progressElapsed = document.getElementById('progressElapsed');
         const progressRemaining = document.getElementById('progressRemaining');
         const progressWords = document.getElementById('progressWords');
+        const cancelBtn = document.getElementById('cancelBtn');
         const downloadsSection = document.getElementById('downloadsSection');
         const downloadList = document.getElementById('downloadList');
         const downloadAllBtn = document.getElementById('downloadAllBtn');
@@ -1146,6 +1173,18 @@
         // Conversion
         convertBtn.addEventListener('click', startConversion);
 
+        cancelBtn.addEventListener('click', async () => {
+            if (!currentJobId) return;
+            // Optimistic UI: disable immediately
+            cancelBtn.disabled = true;
+            cancelBtn.textContent = 'Cancelling...';
+            try {
+                await fetch(`/api/cancel/${currentJobId}`, { method: 'DELETE' });
+            } catch (e) {
+                // Ignore network errors — the SSE handler will catch the cancelled status
+            }
+        });
+
         async function startConversion() {
             const selected = getSelectedChapters();
             if (selected.length === 0) {
@@ -1162,6 +1201,9 @@
             progressFill.style.width = '0%';
             progressPercent.textContent = '0%';
             progressStatus.textContent = 'Starting...';
+            cancelBtn.style.display = 'block';
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = 'Cancel';
 
             const formData = new FormData();
             formData.append('upload_id', uploadId);
@@ -1221,15 +1263,22 @@
                 }
 
                 if (data.status === 'complete') {
+                    cancelBtn.style.display = 'none';
                     eventSource.close();
                     showDownloads(jobId, data.files);
+                } else if (data.status === 'cancelled') {
+                    cancelBtn.style.display = 'none';
+                    eventSource.close();
+                    showError('Conversion was cancelled.');
                 } else if (data.status === 'error') {
+                    cancelBtn.style.display = 'none';
                     eventSource.close();
                     showError(data.message);
                 }
             };
 
             eventSource.onerror = () => {
+                cancelBtn.style.display = 'none';
                 eventSource.close();
                 showError('Connection lost');
             };
@@ -1238,6 +1287,7 @@
         function showDownloads(jobId, files) {
             convertBtn.disabled = false;
             convertBtn.textContent = `Convert to ${formatSelect.value.toUpperCase()}`;
+            cancelBtn.style.display = 'none';
 
             downloadList.innerHTML = '';
             files.forEach(file => {
