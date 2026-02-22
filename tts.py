@@ -144,48 +144,68 @@ def _resample_audio(audio: np.ndarray, speed: float, sample_rate: int) -> np.nda
 
 
 # Max words per chunk passed to model.generate_audio().
-# Pocket TTS internally sequences at 1000 audio frames; long sentences with no
-# punctuation can exceed this. Keeping chunks at ≤100 words stays comfortably
-# within the limit (the model's own sentence splitter targets ~27 words/chunk).
-_MAX_WORDS_PER_CHUNK = 100
+# Pocket TTS internally sequences audio frames; long inputs without clear
+# sentence boundaries can exceed its limit, causing silent truncation
+# (the model emits a "Maximum generation length reached without EOS" warning
+# and drops the tail of the chunk).  The model's own splitter targets ~27
+# words/chunk.  Keeping our chunks at ≤50 words gives it at most ~2 of its
+# own internal chunks per call, safely under any frame limit.
+_MAX_WORDS_PER_CHUNK = 50
 
 
 def _split_text_into_chunks(text: str, max_words: int = _MAX_WORDS_PER_CHUNK) -> list[str]:
     """
-    Split text into chunks of at most max_words words, breaking at sentence
-    boundaries where possible and falling back to word boundaries.
+    Split text into chunks of at most max_words words.
+
+    Priority of split points (best to worst):
+      1. Sentence boundaries  (.  !  ?  ;)
+      2. Comma clause boundaries within long sentences
+      3. Hard word-boundary cut (last resort)
+
+    This prevents the TTS model from silently truncating long runs that
+    have no natural sentence breaks.
     """
     import re
 
-    # Split on sentence-ending punctuation, keeping the delimiter
+    # --- pass 1: split on sentence-ending punctuation ---
     sentences = re.split(r'(?<=[.!?;])\s+', text.strip())
 
-    chunks = []
-    current_words = []
+    # --- pass 2: split long sentences at comma boundaries ---
+    clauses: list[str] = []
+    for sentence in sentences:
+        if len(sentence.split()) > max_words:
+            # Break at commas; each part keeps its trailing comma so the
+            # model knows it's mid-thought (better prosody than a hard cut).
+            parts = re.split(r'(?<=,)\s+', sentence)
+            clauses.extend(parts)
+        else:
+            clauses.append(sentence)
+
+    # --- pass 3: accumulate clauses into ≤max_words chunks ---
+    chunks: list[str] = []
+    current_words: list[str] = []
     current_count = 0
 
-    for sentence in sentences:
-        words = sentence.split()
+    for clause in clauses:
+        words = clause.split()
         if not words:
             continue
 
-        # If a single sentence is too long, split it at word boundaries
+        # Hard word-boundary split for any clause still over the limit
+        # (e.g. a comma-free run-on sentence longer than max_words).
         if len(words) > max_words:
-            # Flush any pending words first
             if current_words:
                 chunks.append(' '.join(current_words))
                 current_words = []
                 current_count = 0
-            # Split the long sentence into word-boundary chunks
             for i in range(0, len(words), max_words):
                 chunks.append(' '.join(words[i:i + max_words]))
             continue
 
         if current_count + len(words) > max_words:
-            # Flush current chunk and start fresh
             if current_words:
                 chunks.append(' '.join(current_words))
-            current_words = words
+            current_words = words[:]
             current_count = len(words)
         else:
             current_words.extend(words)
