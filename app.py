@@ -52,14 +52,27 @@ EPUB2MP3_TMP_PREFIX = "epub2mp3_"           # Prefix used by tempfile.mkdtemp ca
 def _cleanup_orphaned_tmp_dirs(max_age_seconds: int = ORPHAN_TTL_SECONDS) -> int:
     """Delete orphaned /tmp/epub2mp3_* directories older than *max_age_seconds*.
 
+    Skips directories that belong to in-progress jobs so long-running
+    conversions (e.g. 10-hour audiobooks) are not interrupted.
+
     Returns the number of directories removed.
     """
+    # Collect dirs actively in use by processing jobs
+    active_dirs: set[str] = set()
+    for job in jobs.values():
+        if job.get("status") == "processing":
+            jd = job.get("job_dir")
+            if jd:
+                active_dirs.add(str(jd))
+
     tmp = Path(tempfile.gettempdir())
     now = time.time()
     removed = 0
     for entry in tmp.iterdir():
         if not entry.name.startswith(EPUB2MP3_TMP_PREFIX):
             continue
+        if str(entry) in active_dirs:
+            continue  # Never delete an active job's working directory
         try:
             age = now - entry.stat().st_mtime
             if age > max_age_seconds:

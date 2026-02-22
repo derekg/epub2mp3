@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 from converter import convert_epub_to_mp3, BUILTIN_VOICES, is_ffmpeg_available
-from text_processor import ProcessingMode, is_ollama_available, DEFAULT_MODEL, RECOMMENDED_MODELS
+from text_processor import ProcessingMode, is_gemini_available
 
 app = typer.Typer(
     name="inkvoice",
@@ -61,22 +61,17 @@ def convert(
     clean: bool = typer.Option(
         False,
         "--clean", "-c",
-        help="Clean text using LLM (remove footnotes, artifacts). Requires Ollama.",
+        help="Clean text using Gemini (remove footnotes, artifacts). Requires GEMINI_API_KEY.",
     ),
     speed_read: bool = typer.Option(
         False,
         "--speed-read",
-        help="Create condensed ~30% summary. Requires Ollama.",
+        help="Create condensed ~30% summary. Requires GEMINI_API_KEY.",
     ),
     summary: bool = typer.Option(
         False,
         "--summary",
-        help="Create brief ~10% summary. Requires Ollama.",
-    ),
-    model: str = typer.Option(
-        DEFAULT_MODEL,
-        "--model", "-m",
-        help=f"LLM model for text processing. Default: {DEFAULT_MODEL}. Try: gemma3:1b (faster), gemma3:12b (better).",
+        help="Create brief ~10% summary. Requires GEMINI_API_KEY.",
     ),
 ):
     """Convert an EPUB file to audiobook(s)."""
@@ -102,10 +97,10 @@ def convert(
     elif clean:
         text_processing = ProcessingMode.CLEAN
 
-    # Check Ollama availability for LLM features
-    if text_processing != ProcessingMode.NONE and not is_ollama_available():
-        console.print("[yellow]Warning:[/yellow] Ollama not available. Using basic text cleaning.")
-        console.print("[dim]Install Ollama: brew install ollama && ollama serve && ollama pull gemma2:2b[/dim]")
+    # Warn if Gemini not configured
+    if text_processing != ProcessingMode.NONE and not is_gemini_available():
+        console.print("[yellow]Warning:[/yellow] Gemini not configured. Set GEMINI_API_KEY for text processing.")
+        console.print("[dim]Using basic text cleaning as fallback.[/dim]")
 
     # Set output directory
     if output is None:
@@ -159,7 +154,6 @@ def convert(
             output_files = convert_epub_to_mp3(
                 epub_path=str(epub_file),
                 output_dir=str(output),
-                model=tts_model,
                 voice=voice,
                 per_chapter=not single_file,
                 progress_callback=progress_callback,
@@ -167,7 +161,6 @@ def convert(
                 announce_chapters=announce,
                 output_format=format_lower,
                 text_processing=text_processing,
-                llm_model=model,
             )
         except Exception as e:
             console.print(f"[red]Error:[/red] {e}")
@@ -192,24 +185,15 @@ def voices():
 
 @app.command()
 def models():
-    """List recommended LLM models for text processing."""
-    from text_processor import get_available_models
+    """Show text processing configuration (Gemini)."""
+    from text_processor import is_gemini_available as _gem
 
-    console.print("[bold]Recommended LLM models:[/bold]")
-    for model_name, description in RECOMMENDED_MODELS:
-        console.print(f"  • [cyan]{model_name}[/cyan] - {description}")
-
-    console.print()
-
-    # Check what's actually installed
-    available = get_available_models()
-    if available:
-        console.print("[bold]Installed in Ollama:[/bold]")
-        for m in available:
-            console.print(f"  • {m}")
+    console.print("[bold]Text processing:[/bold] Gemini Flash")
+    if _gem():
+        console.print("[green]✓[/green] Gemini API key configured")
     else:
-        console.print("[yellow]Ollama not running or no models installed.[/yellow]")
-        console.print("[dim]Install: brew install ollama && ollama serve && ollama pull gemma3:4b[/dim]")
+        console.print("[yellow]✗[/yellow] GEMINI_API_KEY not set — text processing unavailable")
+        console.print("[dim]Set GEMINI_API_KEY in your .env file or environment.[/dim]")
 
 
 @app.command()
