@@ -764,7 +764,7 @@
             height: 100%;
             background: var(--accent);
             width: 0%;
-            transition: width 0.4s ease;
+            transition: width 0.6s ease-in-out;
         }
 
         .progress-info {
@@ -1253,7 +1253,7 @@
                             </div>
                             <div class="progress-detail">
                                 <div class="progress-detail-value" id="progressWords">-</div>
-                                <div class="progress-detail-label">Words</div>
+                                <div class="progress-detail-label">Words <span id="progressRate" style="font-size:0.75em;opacity:0.7;"></span></div>
                             </div>
                         </div>
                     </div>
@@ -1331,6 +1331,7 @@
         const progressElapsed     = document.getElementById('progressElapsed');
         const progressRemaining   = document.getElementById('progressRemaining');
         const progressWords       = document.getElementById('progressWords');
+        const progressRate        = document.getElementById('progressRate');
         const downloadsSection    = document.getElementById('downloadsSection');
         const downloadList        = document.getElementById('downloadList');
         const downloadAllBtn      = document.getElementById('downloadAllBtn');
@@ -1347,6 +1348,7 @@
         let ttsAvailable   = false;
         let previewAudio   = null;
         let voiceData      = [];
+        let primaryJobId   = null;
 
         // Duration estimate constants
         const WORDS_PER_MINUTE = 150;
@@ -1425,6 +1427,19 @@
             card.querySelector(`#cancel-${jobId}`).addEventListener('click', () => cancelJob(jobId));
 
             jobQueue.set(jobId, { id: jobId, title, status: 'processing', progress: 0, files: [] });
+
+            // Make this the primary job shown in the main progress section
+            primaryJobId = jobId;
+            progressSection.style.display = 'block';
+            progressFill.style.width = '0%';
+            progressStatus.textContent = 'Starting…';
+            progressPercent.textContent = '0%';
+            progressChapter.textContent = '-';
+            progressElapsed.textContent = '0:00';
+            progressRemaining.textContent = '--:--';
+            progressWords.textContent = '-';
+            progressRate.textContent = '';
+
             syncJobsUI();
             return card;
         }
@@ -1437,6 +1452,41 @@
             } catch (_) {}
         }
 
+        function updatePrimaryProgress(data) {
+            const d = data.details || {};
+            progressFill.style.width    = `${data.progress}%`;
+            progressPercent.textContent = `${Math.round(data.progress)}%`;
+            progressStatus.textContent  = data.message || '';
+
+            const ch = d.chapter_current, ct = d.chapter_total;
+            progressChapter.textContent = (ch && ct) ? `${ch} / ${ct}` : '-';
+
+            progressElapsed.textContent   = formatTime(d.elapsed_seconds);
+            progressRemaining.textContent = formatTime(d.estimated_remaining_seconds);
+
+            const wp = d.words_processed, wt = d.words_total;
+            if (wp != null && wt != null && wt > 0) {
+                progressWords.textContent = `${formatWords(wp)} / ${formatWords(wt)}`;
+            } else if (wt != null && wt > 0) {
+                progressWords.textContent = formatWords(wt);
+            } else {
+                progressWords.textContent = '-';
+            }
+
+            const wps = d.words_per_sec;
+            progressRate.textContent = wps != null ? `~${wps} w/s` : '';
+
+            if (data.status === 'complete') {
+                progressFill.style.width    = '100%';
+                progressPercent.textContent = '100%';
+                progressStatus.textContent  = 'Complete';
+            } else if (data.status === 'error') {
+                progressStatus.textContent = 'Failed';
+            } else if (data.status === 'cancelled') {
+                progressStatus.textContent = 'Cancelled';
+            }
+        }
+
         function updateJobCard(jobId, data) {
             const job = jobQueue.get(jobId);
             if (!job) return;
@@ -1445,6 +1495,9 @@
             job.progress = data.progress;
             job.message  = data.message;
             if (data.files) job.files = data.files;
+
+            // Mirror to main progress section if this is the primary job
+            if (jobId === primaryJobId) updatePrimaryProgress(data);
 
             const dot    = document.getElementById(`dot-${jobId}`);
             const st     = document.getElementById(`st-${jobId}`);
