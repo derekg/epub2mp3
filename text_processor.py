@@ -58,15 +58,25 @@ def is_gemini_available() -> bool:
 
 
 # Text cleaning prompt - optimized for TTS
-CLEAN_PROMPT = """Clean this text for text-to-speech. Remove:
-- Footnote markers [1], [2], *, †
-- Page numbers
-- Figure/table references like "See Figure 3.2"
-- URLs (keep link text if meaningful)
-- Repeated headers/footers
-- Excessive whitespace
+CLEAN_PROMPT = """You are preparing a book chapter for text-to-speech narration.
 
-Keep ALL actual content. Do not summarize. Output only the cleaned text.
+YOUR ONLY JOB IS DELETION. Delete the following artifact types and nothing else:
+- Footnote markers: [1], [2], [3], *, †, ‡, §
+- Standalone page numbers (a number on its own line, e.g. "42" or "Page 12")
+- Figure/table callouts: "See Figure 3.2", "Table 4", "(Fig. 1)", etc.
+- URLs and bare hyperlinks (https://..., www....)
+- Repeated running headers or footers (same text block appearing multiple times)
+- Lines that are only whitespace, dashes, or asterisks used as dividers
+
+STRICT RULES — violations are not acceptable:
+- DO NOT rephrase, rewrite, or tighten any sentence
+- DO NOT remove redundant phrasing or repeated ideas
+- DO NOT summarize or condense anything
+- DO NOT correct grammar or spelling
+- DO NOT add any words that were not in the original
+- Every prose sentence must be reproduced WORD FOR WORD
+
+Output only the cleaned text with no commentary.
 
 Text:
 {text}"""
