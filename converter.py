@@ -562,7 +562,7 @@ def convert_epub_to_mp3(
     bitrate: int = 192,
 ) -> list[str]:
     """
-    Convert an EPUB file to audio files (MP3 or M4B) using Pocket TTS.
+    Convert an EPUB file to audio files (MP3 or M4B) using Kokoro TTS.
 
     Args:
         epub_path: Path to the EPUB file

@@ -1,7 +1,14 @@
-"""Text-to-Speech using Pocket TTS (local, no API limits).
+"""Text-to-Speech via Kokoro TTS (Kokoro-82M).
 
-Pocket TTS provides offline speech synthesis with voice cloning.
-Uses predefined voice embeddings from HuggingFace.
+Engine selection at import time:
+  1. mlx_audio available  → Kokoro MLX  (fastest on Apple Silicon)
+  2. kokoro_onnx available → Kokoro ONNX (cross-platform)
+
+Run setup_kokoro.py once to download model files before first use.
+
+Install:
+  Apple Silicon:  pip install mlx-audio
+  Cross-platform: pip install kokoro-onnx huggingface_hub
 """
 
 import numpy as np
@@ -13,33 +20,33 @@ try:
 except ImportError:
     SCIPY_AVAILABLE = False
 
-# Try to import pocket-tts
+# --- Engine detection (happens once at import time) ---
+# Test Kokoro MLX: mlx_audio must be installed AND its Kokoro pipeline must be
+# importable (it has optional deps like misaki/phonemizer that may be missing).
 try:
-    from pocket_tts import TTSModel
-    from pocket_tts.utils.utils import PREDEFINED_VOICES
-    POCKET_TTS_AVAILABLE = True
-except ImportError:
-    POCKET_TTS_AVAILABLE = False
-    TTSModel = None
-    PREDEFINED_VOICES = {}
+    import mlx_audio  # noqa: F401
+    from mlx_audio.tts.models.kokoro import Model as _KokoroMLXModel  # noqa: F401
+    KOKORO_ENGINE: str = "mlx"
+except (ImportError, AttributeError):
+    try:
+        from kokoro_onnx import Kokoro as _KokoroONNX  # noqa: F401
+        KOKORO_ENGINE: str = "onnx"
+    except ImportError:
+        raise RuntimeError(
+            "No Kokoro TTS engine found.\n"
+            "Install one of:\n"
+            "  Apple Silicon:  pip install mlx-audio\n"
+            "  Cross-platform: pip install kokoro-onnx huggingface_hub\n"
+            "Then run: python setup_kokoro.py"
+        ) from None
 
-# Sample rate for Pocket TTS
+# Sample rate
 SAMPLE_RATE = 24000
 
-# Available Pocket TTS voices (from predefined embeddings)
-VOICES = {
-    "alba": {"char": "Warm", "gender": "F", "best_for": "narration"},
-    "marius": {"char": "Clear", "gender": "M", "best_for": "narration"},
-    "javert": {"char": "Firm", "gender": "M", "best_for": "narration"},
-    "jean": {"char": "Smooth", "gender": "M", "best_for": "narration"},
-    "fantine": {"char": "Soft", "gender": "F", "best_for": "narration"},
-    "cosette": {"char": "Youthful", "gender": "F", "best_for": "casual"},
-    "eponine": {"char": "Bright", "gender": "F", "best_for": "casual"},
-    "azelma": {"char": "Light", "gender": "F", "best_for": "casual"},
-}
-
-# Default voice
-DEFAULT_VOICE = "alba"
+# Voice catalogue from Kokoro
+from kokoro_tts import KOKORO_VOICES, DEFAULT_KOKORO_VOICE
+VOICES = {name: dict(info) for name, info in KOKORO_VOICES.items()}
+DEFAULT_VOICE = DEFAULT_KOKORO_VOICE
 
 # Global model instance and cached voice states
 _tts_model = None
@@ -47,49 +54,14 @@ _voice_states = {}  # Cache voice states to avoid re-downloading
 
 
 def load_model():
-    """Load the Pocket TTS model. Call once at startup."""
-    global _tts_model
-    if not POCKET_TTS_AVAILABLE:
-        raise RuntimeError("pocket-tts not installed. Run: pip install pocket-tts")
-
-    print("Loading TTS model...")
-    _tts_model = TTSModel.load_model()
-    print("TTS model loaded!")
-    return _tts_model
-
-
-def get_model():
-    """Get the loaded TTS model."""
-    global _tts_model
-    if _tts_model is None:
-        load_model()
-    return _tts_model
-
-
-def _get_voice_state(voice: str) -> dict:
-    """Get or create a voice state for the given voice name."""
-    global _voice_states
-
-    if voice in _voice_states:
-        return _voice_states[voice]
-
-    model = get_model()
-
-    # Use predefined voice embedding (downloads from HuggingFace if needed)
-    if voice in PREDEFINED_VOICES:
-        print(f"Loading voice '{voice}' from HuggingFace...")
-        state = model._cached_get_state_for_audio_prompt(voice, truncate=True)
-        _voice_states[voice] = state
-        return state
-    else:
-        # Fallback to default voice
-        print(f"Unknown voice '{voice}', using {DEFAULT_VOICE}")
-        return _get_voice_state(DEFAULT_VOICE)
+    """Load the Kokoro TTS model. Downloads weights on first run."""
+    import kokoro_tts  # noqa: PLC0415
+    return kokoro_tts.load_kokoro_model(KOKORO_ENGINE)
 
 
 def is_tts_available() -> bool:
-    """Check if Pocket TTS is available."""
-    return POCKET_TTS_AVAILABLE
+    """Check if any TTS engine is available."""
+    return bool(KOKORO_ENGINE)
 
 
 def get_voice_list() -> list[dict]:
@@ -102,6 +74,7 @@ def get_voice_list() -> list[dict]:
             "gender": info["gender"],
             "best_for": info["best_for"],
             "label": f"{name} ({info['char']}, {info['gender']})",
+            "engine": "kokoro",
         })
     return voices
 
@@ -143,13 +116,10 @@ def _resample_audio(audio: np.ndarray, speed: float, sample_rate: int) -> np.nda
     return resampled.astype(dtype)
 
 
-# Max words per chunk passed to model.generate_audio().
-# Pocket TTS internally sequences audio frames; long inputs without clear
-# sentence boundaries can exceed its limit, causing silent truncation
-# (the model emits a "Maximum generation length reached without EOS" warning
-# and drops the tail of the chunk).  The model's own splitter targets ~27
-# words/chunk.  Keeping our chunks at ≤50 words gives it at most ~2 of its
-# own internal chunks per call, safely under any frame limit.
+# Max words per chunk passed to the TTS model.
+# Kokoro works best with short, natural-sentence segments.  Keeping chunks
+# at ≤50 words avoids silent truncation on long comma-free runs and gives
+# better prosody than feeding entire paragraphs at once.
 _MAX_WORDS_PER_CHUNK = 50
 
 
@@ -234,60 +204,24 @@ def generate_speech(
     voice: str = DEFAULT_VOICE,
     progress_callback: Callable[[str], None] = None,
     speed: float = 1.0,
+    chunk_callback: Callable[[int, int], None] = None,
 ) -> tuple[np.ndarray, int]:
     """
-    Generate speech audio from text using Pocket TTS.
+    Generate speech audio from text using Kokoro TTS.
 
     Args:
-        text: Text to convert to speech
-        voice: Voice name (default: alba)
-        progress_callback: Optional callback for progress updates
-        speed: Playback speed multiplier (0.75, 1.0, 1.25, 1.5, 2.0).
-               Implemented via resampling since Pocket TTS has no native
-               speed control.
+        text: Text to convert to speech.
+        voice: Voice name (see VOICES / kokoro_tts.KOKORO_VOICES).
+        progress_callback: Optional callback(message) for status updates.
+        speed: Playback speed multiplier (0.75 – 2.0).
+        chunk_callback: Optional callback(done, total) fired after each ~50-word
+            chunk is synthesised.  Enables fine-grained progress reporting.
 
     Returns:
-        Tuple of (audio numpy array int16, sample rate)
+        Tuple of (audio numpy array int16, sample rate).
     """
-    model = get_model()
-
-    # Validate voice
-    if voice not in VOICES:
-        if progress_callback:
-            progress_callback(f"Unknown voice '{voice}', using {DEFAULT_VOICE}")
-        voice = DEFAULT_VOICE
-
-    if progress_callback:
-        progress_callback(f"Generating speech with {voice}...")
-
-    # Get voice state
-    voice_state = _get_voice_state(voice)
-
-    # Pre-chunk text to avoid Pocket TTS autoregressive sequence length overflow.
-    # The model hard-limits at 1000 audio frames; long sentences without punctuation
-    # produce a single oversized chunk that crashes generation.
-    chunks = _split_text_into_chunks(text)
-
-    # 100ms silence between chunks for natural pacing
-    silence = np.zeros(int(SAMPLE_RATE * 0.1), dtype=np.int16)
-
-    audio_parts = []
-    for chunk in chunks:
-        audio_tensor = model.generate_audio(voice_state, chunk)
-        audio_parts.append(_tensor_to_int16(audio_tensor))
-        if len(chunks) > 1:
-            audio_parts.append(silence)
-
-    if not audio_parts:
-        return np.array([], dtype=np.int16), SAMPLE_RATE
-
-    audio_np = np.concatenate(audio_parts)
-
-    # Apply speed adjustment via resampling
-    if abs(speed - 1.0) >= 0.001:
-        audio_np = _resample_audio(audio_np, speed, SAMPLE_RATE)
-
-    return audio_np, SAMPLE_RATE
+    import kokoro_tts as _kt  # noqa: PLC0415
+    return _kt.generate_speech_kokoro(text, voice, speed, chunk_callback, KOKORO_ENGINE)
 
 
 def generate_preview(voice: str = DEFAULT_VOICE) -> tuple[np.ndarray, int]:
@@ -303,5 +237,5 @@ if __name__ == "__main__":
 
     if is_tts_available():
         print("\n--- Testing TTS ---")
-        audio, sr = generate_speech("This is a test of Pocket text to speech.", "alba")
+        audio, sr = generate_speech("This is a test of Kokoro text to speech.", DEFAULT_VOICE)
         print(f"Generated {len(audio)} samples at {sr}Hz ({len(audio)/sr:.2f} seconds)")

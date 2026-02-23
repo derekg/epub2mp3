@@ -279,7 +279,7 @@ async def get_capabilities():
         "ffmpeg_available": is_ffmpeg_available(),
         "gemini_available": is_gemini_available(),
         "tts_available": is_tts_available(),
-        "tts_engine": "Pocket TTS (local)",
+        "tts_engine": "Kokoro TTS (local)",
         "text_processing_modes": [
             {"value": "none", "label": "None", "description": "No text processing"},
             {"value": "clean", "label": "Clean", "description": "Remove footnotes, artifacts"},
@@ -434,7 +434,7 @@ async def start_conversion(
     bitrate: int = Form(192),  # MP3 bitrate: 64, 128, 192
     epub_file: UploadFile = File(None),  # For backwards compatibility
 ):
-    """Start EPUB to audio conversion (MP3 or M4B) using Pocket TTS."""
+    """Start EPUB to audio conversion (MP3 or M4B) using Kokoro TTS."""
     # Check TTS availability
     if not is_tts_available():
         raise HTTPException(status_code=503, detail="Gemini TTS not configured. Set GEMINI_API_KEY environment variable.")
@@ -528,7 +528,7 @@ async def run_conversion(
     speed: float = 1.0,
     bitrate: int = 192,
 ):
-    """Run the conversion in the background using Pocket TTS."""
+    """Run the conversion in the background using Kokoro TTS."""
     job = jobs[job_id]
 
     def progress_callback(current: int, total: int, message: str, details: dict = None):

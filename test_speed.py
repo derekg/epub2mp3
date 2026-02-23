@@ -236,8 +236,7 @@ class TestSpeedEndToEnd:
         # Patch is_tts_available so the app reports TTS as available
         with patch("app.is_tts_available", return_value=True), \
              patch("app.load_model", return_value=None), \
-             patch("tts._tts_model", MagicMock()), \
-             patch("tts.POCKET_TTS_AVAILABLE", True):
+             patch("tts._tts_model", MagicMock()):
             from app import app
             yield TestClient(app, raise_server_exceptions=False)
 
@@ -336,7 +335,6 @@ class TestSpeedEndToEnd:
         with patch("app.is_tts_available", return_value=True), \
              patch("app.load_model", return_value=None), \
              patch("tts._tts_model", MagicMock()), \
-             patch("tts.POCKET_TTS_AVAILABLE", True), \
              patch("app.run_conversion", side_effect=fake_run_conversion), \
              patch("app.asyncio.create_task") as mock_create_task:
 
@@ -373,7 +371,7 @@ class TestSpeedEndToEnd:
 # ---------------------------------------------------------------------------
 
 class TestSplitTextIntoChunks:
-    """Tests for _split_text_into_chunks — the fix for Pocket TTS tensor overflow."""
+    """Tests for _split_text_into_chunks — prevents TTS model truncation on long inputs."""
 
     def test_short_text_single_chunk(self):
         """Text under max_words stays as one chunk."""
