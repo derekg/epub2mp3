@@ -658,11 +658,16 @@ async def stream_progress(job_id: str):
                 start_time = details.get("start_time", time.time())
                 elapsed = time.time() - start_time
 
-                # Estimate remaining time based on progress
+                # Estimate remaining time based on words-per-second throughput
+                words_processed = details.get("words_processed", 0)
+                words_total = details.get("words_total", 0)
                 estimated_remaining = None
-                if job["progress"] > 5:  # Only estimate after some progress
-                    total_estimated = elapsed / (job["progress"] / 100)
-                    estimated_remaining = max(0, total_estimated - elapsed)
+                words_per_sec = None
+                if elapsed > 30 and words_processed > 0 and words_total > 0:
+                    words_per_sec = words_processed / elapsed
+                    words_remaining = words_total - words_processed
+                    if words_per_sec > 0:
+                        estimated_remaining = max(0, words_remaining / words_per_sec)
 
                 data = json.dumps({
                     "status": job["status"],
@@ -672,7 +677,8 @@ async def stream_progress(job_id: str):
                     "details": {
                         **details,
                         "elapsed_seconds": int(elapsed),
-                        "estimated_remaining_seconds": int(estimated_remaining) if estimated_remaining else None,
+                        "estimated_remaining_seconds": int(estimated_remaining) if estimated_remaining is not None else None,
+                        "words_per_sec": round(words_per_sec, 1) if words_per_sec is not None else None,
                     }
                 })
                 yield f"data: {data}\n\n"

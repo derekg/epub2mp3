@@ -455,18 +455,25 @@ def create_m4b_with_chapters(
             return (False, f"ffmpeg exception: {e}")
 
 
-def text_to_audio(text: str, voice: str = DEFAULT_VOICE, speed: float = 1.0) -> tuple[np.ndarray, int]:
+def text_to_audio(
+    text: str,
+    voice: str = DEFAULT_VOICE,
+    speed: float = 1.0,
+    chunk_callback=None,
+) -> tuple[np.ndarray, int]:
     """
-    Convert text to audio using Pocket TTS.
+    Convert text to audio using the active TTS engine.
 
     Args:
         text: Text to synthesize.
         voice: Voice name.
         speed: Playback speed multiplier (e.g. 0.75, 1.0, 1.5, 2.0).
+        chunk_callback: Optional callable(done, total) fired after each ~50-word
+            chunk.  Pass through to generate_speech for chunk-level progress.
 
     Returns tuple of (audio numpy array, sample rate).
     """
-    return generate_speech(text, voice, speed=speed)
+    return generate_speech(text, voice, speed=speed, chunk_callback=chunk_callback)
 
 
 def convert_wav_to_mp3(wav_data: np.ndarray, sample_rate: int, output_path: str, bitrate: int = 192):
@@ -710,8 +717,24 @@ def convert_epub_to_mp3(
                     pause = np.zeros(int(sample_rate * 0.8), dtype=announcement.dtype)
                     chapter_audio_parts.append(pause)
 
+            # Build a chunk-level progress closure so the bar moves every
+            # ~2-3 seconds instead of once per chapter.
+            if progress_callback and total_words > 0:
+                _cw, _t, _wp = chapter_words, title, words_processed
+
+                def _chunk_cb(done: int, total: int) -> None:
+                    wp = _wp + int(done / total * _cw)
+                    pct = 10 + int((wp / total_words) * 85)
+                    chapter_pct = int(done / total * 100)
+                    progress_callback(
+                        pct, 100, f"Converting: {_t[:25]}... {chapter_pct}%",
+                        {**chapter_details, "stage": "tts", "words_processed": wp},
+                    )
+            else:
+                _chunk_cb = None
+
             # Generate chapter content audio
-            content_audio, _ = text_to_audio(text, voice, speed=speed)
+            content_audio, _ = text_to_audio(text, voice, speed=speed, chunk_callback=_chunk_cb)
             if len(content_audio) > 0:
                 chapter_audio_parts.append(content_audio)
 
@@ -793,7 +816,22 @@ def convert_epub_to_mp3(
                     pause = np.zeros(int(sample_rate * 0.8), dtype=announcement.dtype)
                     chapter_audio_parts.append(pause)
 
-            content_audio, _ = text_to_audio(text, voice, speed=speed)
+            # Build chunk-level progress closure for combined-file mode.
+            if progress_callback and total_words > 0:
+                _cw, _t, _wp = chapter_words, title, words_processed
+
+                def _chunk_cb(done: int, total: int) -> None:
+                    wp = _wp + int(done / total * _cw)
+                    pct = 10 + int((wp / total_words) * 80)
+                    chapter_pct = int(done / total * 100)
+                    progress_callback(
+                        pct, 100, f"Converting: {_t[:25]}... {chapter_pct}%",
+                        {**chapter_details, "stage": "tts", "words_processed": wp},
+                    )
+            else:
+                _chunk_cb = None
+
+            content_audio, _ = text_to_audio(text, voice, speed=speed, chunk_callback=_chunk_cb)
             if len(content_audio) > 0:
                 chapter_audio_parts.append(content_audio)
 
