@@ -49,6 +49,11 @@ JOB_TTL_SECONDS = 60 * 60                   # Remove completed/error jobs after 
 ORPHAN_TTL_SECONDS = 2 * 60 * 60           # Remove orphaned temp dirs after 2 hours
 EPUB2MP3_TMP_PREFIX = "epub2mp3_"           # Prefix used by tempfile.mkdtemp calls
 
+# MLX runs on a single Metal GPU command queue and is not thread-safe for
+# concurrent inference. Serialize all TTS work behind a semaphore so multiple
+# simultaneous jobs queue up rather than racing on the GPU.
+TTS_GPU_SEMAPHORE = asyncio.Semaphore(1)
+
 
 def _cleanup_orphaned_tmp_dirs(max_age_seconds: int = ORPHAN_TTL_SECONDS) -> int:
     """Delete orphaned /tmp/epub2mp3_* directories older than *max_age_seconds*.
@@ -152,6 +157,7 @@ def _save_jobs_manifest():
             "can_resume": job.get("can_resume", False),
             "settings": job.get("settings", {}),
             "has_cover": has_cover,
+            "summary": job.get("summary"),
         })
     JOBS_MANIFEST.write_text(json.dumps(entries, indent=2))
 
@@ -185,6 +191,8 @@ def _load_persisted_jobs():
                 "author": entry.get("author", ""),
                 "checkpoint_dir": checkpoint_dir,
                 "can_resume": entry.get("can_resume", False),
+                "settings": entry.get("settings", {}),
+                "summary": entry.get("summary"),
             }
             loaded += 1
         if loaded:
@@ -307,21 +315,29 @@ async def get_capabilities():
 
 @app.get("/api/jobs")
 async def list_jobs():
-    """Return all completed jobs (persisted across restarts)."""
+    """Return all completed and in-progress jobs."""
     result = []
     for job_id, job in jobs.items():
-        if job.get("status") not in ("complete", "error"):
+        if job.get("status") not in ("complete", "error", "processing"):
             continue
         result.append({
             "job_id": job_id,
             "status": job["status"],
+            "progress": job.get("progress", 0),
             "files": job.get("files", []),
             "completed_at": job.get("completed_at"),
             "title": job.get("title", ""),
             "author": job.get("author", ""),
             "message": job.get("message", ""),
+            "settings": job.get("settings", {}),
+            "summary": job.get("summary"),
         })
-    result.sort(key=lambda j: j.get("completed_at") or 0, reverse=True)
+    # Sort: processing jobs first, then by completed_at descending
+    def sort_key(j):
+        if j["status"] == "processing":
+            return (0, 0)
+        return (1, -(j.get("completed_at") or 0))
+    result.sort(key=sort_key)
     return {"jobs": result}
 
 
@@ -579,24 +595,30 @@ async def run_conversion(
         job["message"] = message
         if details:
             job["details"].update(details)
+            if "book_title" in details and not job.get("title"):
+                job["title"] = details["book_title"]
+                job["author"] = details.get("book_author", "")
 
     try:
-        output_files = await asyncio.to_thread(
-            convert_epub_to_mp3,
-            epub_path,
-            str(job["output_dir"]),
-            voice,
-            per_chapter,
-            progress_callback,
-            chapter_indices,
-            skip_existing,
-            announce_chapters,
-            output_format,
-            text_processing,
-            speed,
-            bitrate,
-            checkpoint_dir,
-        )
+        job["message"] = "Waiting for GPU..."
+        async with TTS_GPU_SEMAPHORE:
+            job["message"] = "Starting..."
+            output_files = await asyncio.to_thread(
+                convert_epub_to_mp3,
+                epub_path,
+                str(job["output_dir"]),
+                voice,
+                per_chapter,
+                progress_callback,
+                chapter_indices,
+                skip_existing,
+                announce_chapters,
+                output_format,
+                text_processing,
+                speed,
+                bitrate,
+                checkpoint_dir,
+            )
 
         job["status"] = "complete"
         job["completed_at"] = time.time()
@@ -617,6 +639,17 @@ async def run_conversion(
         if cover_src.exists():
             shutil.copy2(cover_src, persistent_dir / "cover.jpg")
         job["output_dir"] = persistent_dir
+
+        # Build completion summary
+        job["summary"] = {
+            "chapter_count": len(job["files"]),
+            "conversion_time_seconds": int(time.time() - job["details"]["start_time"]),
+            "file_sizes": {
+                f: (persistent_dir / f).stat().st_size
+                for f in job["files"]
+                if (persistent_dir / f).exists()
+            },
+        }
 
         # Clean up temp working dir (EPUB + intermediate files) to free space
         temp_job_dir = job.get("job_dir")
@@ -648,7 +681,10 @@ async def run_conversion(
     except Exception as e:
         job["status"] = "error"
         job["completed_at"] = time.time()
-        job["message"] = str(e)
+        stage = job.get("details", {}).get("stage", "unknown")
+        progress = job.get("progress", 0)
+        context = f" (during {stage}, {progress}% complete)" if stage != "unknown" else ""
+        job["message"] = f"{str(e)}{context}"
         job["progress"] = 0
         job["can_resume"] = True
         # Preserve checkpoint_dir for resume — do not clean it up
