@@ -276,6 +276,34 @@
             cursor: not-allowed;
         }
 
+        /* Resume button inside job card */
+        .job-resume-btn {
+            display: none;
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            color: var(--text-secondary);
+            font-size: 0.74rem;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 4px 10px;
+            margin-top: 6px;
+            width: 100%;
+            transition: border-color 0.15s, color 0.15s;
+        }
+
+        .job-resume-btn.visible { display: block; }
+
+        .job-resume-btn:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .job-resume-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         /* ── Header ───────────────────────────────────────────── */
 
         header {
@@ -1419,12 +1447,15 @@
                 </div>
                 <div class="job-error-msg" id="err-${jobId}"></div>
                 <button class="job-cancel-btn visible" id="cancel-${jobId}" title="Cancel this job">Cancel</button>
+                <button class="job-resume-btn" id="resume-${jobId}" title="Resume from last checkpoint">Resume</button>
             `;
 
             jobsList.insertBefore(card, jobsList.firstChild);
 
             // Wire cancel button
             card.querySelector(`#cancel-${jobId}`).addEventListener('click', () => cancelJob(jobId));
+            // Wire resume button
+            card.querySelector(`#resume-${jobId}`).addEventListener('click', () => resumeJob(jobId));
 
             jobQueue.set(jobId, { id: jobId, title, status: 'processing', progress: 0, files: [] });
 
@@ -1450,6 +1481,53 @@
             try {
                 await fetch(`/api/cancel/${jobId}`, { method: 'DELETE' });
             } catch (_) {}
+        }
+
+        async function resumeJob(jobId) {
+            const btn = document.getElementById(`resume-${jobId}`);
+            if (btn) { btn.disabled = true; btn.textContent = 'Resuming…'; }
+            try {
+                const response = await fetch(`/api/resume/${jobId}`, { method: 'POST' });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    alert(`Resume failed: ${err.detail || response.statusText}`);
+                    if (btn) { btn.disabled = false; btn.textContent = 'Resume'; }
+                    return;
+                }
+                const data = await response.json();
+                const newJobId = data.new_job_id;
+                const chaptersDone = data.chapters_done || 0;
+
+                // Get title from the original job card
+                const origCard = document.getElementById(`job-${jobId}`);
+                const origTitle = origCard
+                    ? origCard.querySelector('.job-card-title').textContent
+                    : 'Resuming…';
+
+                addJob(newJobId, origTitle);
+                listenForProgress(newJobId);
+
+                // Show toast with resume info
+                showToast(`Resuming from chapter ${chaptersDone + 1}…`);
+
+                if (btn) { btn.classList.remove('visible'); }
+            } catch (e) {
+                alert(`Resume error: ${e.message}`);
+                if (btn) { btn.disabled = false; btn.textContent = 'Resume'; }
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.style.cssText = [
+                'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
+                'background:#171717', 'color:#fff', 'font-size:0.85rem', 'font-weight:500',
+                'padding:10px 20px', 'border-radius:8px', 'z-index:9999',
+                'animation:fadeSlideUp 0.3s ease', 'pointer-events:none',
+            ].join(';');
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
         }
 
         function updatePrimaryProgress(data) {
@@ -1495,18 +1573,20 @@
             job.progress = data.progress;
             job.message  = data.message;
             if (data.files) job.files = data.files;
+            if (data.can_resume !== undefined) job.can_resume = data.can_resume;
 
             // Mirror to main progress section if this is the primary job
             if (jobId === primaryJobId) updatePrimaryProgress(data);
 
-            const dot    = document.getElementById(`dot-${jobId}`);
-            const st     = document.getElementById(`st-${jobId}`);
-            const fill   = document.getElementById(`fill-${jobId}`);
-            const pct    = document.getElementById(`pct-${jobId}`);
-            const dlEl   = document.getElementById(`dl-${jobId}`);
-            const links  = document.getElementById(`links-${jobId}`);
-            const errEl  = document.getElementById(`err-${jobId}`);
+            const dot       = document.getElementById(`dot-${jobId}`);
+            const st        = document.getElementById(`st-${jobId}`);
+            const fill      = document.getElementById(`fill-${jobId}`);
+            const pct       = document.getElementById(`pct-${jobId}`);
+            const dlEl      = document.getElementById(`dl-${jobId}`);
+            const links     = document.getElementById(`links-${jobId}`);
+            const errEl     = document.getElementById(`err-${jobId}`);
             const cancelBtn = document.getElementById(`cancel-${jobId}`);
+            const resumeBtn = document.getElementById(`resume-${jobId}`);
 
             if (!dot) return;
 
@@ -1518,6 +1598,7 @@
                 st.className   = 'job-card-status';
                 st.textContent = data.message;
                 fill.className = 'job-progress-fill';
+                if (resumeBtn) resumeBtn.classList.remove('visible');
 
             } else if (data.status === 'complete') {
                 dot.className  = 'job-status-dot complete';
@@ -1528,6 +1609,7 @@
                 fill.className = 'job-progress-fill complete';
 
                 if (cancelBtn) { cancelBtn.classList.remove('visible'); }
+                if (resumeBtn) { resumeBtn.classList.remove('visible'); }
 
                 if (data.files && data.files.length > 0) {
                     links.innerHTML = '';
@@ -1559,6 +1641,7 @@
                 errEl.textContent = data.message;
                 errEl.classList.add('visible');
                 if (cancelBtn) { cancelBtn.classList.remove('visible'); }
+                if (resumeBtn && data.can_resume) { resumeBtn.classList.add('visible'); }
 
             } else if (data.status === 'cancelled') {
                 dot.className  = 'job-status-dot cancelled';
@@ -1567,6 +1650,7 @@
                 fill.className = 'job-progress-fill';
                 pct.textContent= '';
                 if (cancelBtn) { cancelBtn.classList.remove('visible'); }
+                if (resumeBtn && data.can_resume) { resumeBtn.classList.add('visible'); }
             }
 
             syncJobsUI();
