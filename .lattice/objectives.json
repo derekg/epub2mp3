@@ -1,66 +1,19 @@
 {
   "objectives": {
-    "obj_13a3fc72": {
-      "id": "obj_13a3fc72",
-      "description": "MP3 output bitrate selection (64/128/192 kbps)",
+    "obj_3ca1c327": {
+      "id": "obj_3ca1c327",
+      "description": "Fix corrupted HTML: remove duplicate elements from multi-branch merge, restore single clean DOM structure",
       "user_experience": {
         "visible": [
-          "Bitrate dropdown: 64 kbps (small), 128 kbps (standard), 192 kbps (default)",
-          "Estimated file size shown below selector based on duration and bitrate"
+          "One options card with voice, format, bitrate, speed, text-processing, checkboxes",
+          "Duration estimate inside chapters card, not sidebar",
+          "History section at bottom of main column"
         ],
         "behavior": [
-          "Bitrate threaded through: UI -> API -> convert_epub_to_mp3 -> convert_wav_to_mp3",
-          "Voice preview encoder stays at 128 kbps regardless"
+          "No duplicate IDs in DOM",
+          "All controls visible and functional"
         ],
-        "performance": [
-          "No performance impact — just changes lameenc bit rate setting"
-        ]
-      },
-      "constraints": [],
-      "examples": [],
-      "context": {
-        "existing_files": [
-          "converter.py: convert_wav_to_mp3() uses lameenc, hardcoded 192kbps"
-        ],
-        "must_not_change": [],
-        "can_modify": [
-          "converter.py, app.py, templates/index.html"
-        ]
-      },
-      "attempts": [
-        {
-          "approach": "Added bitrate param to convert_wav_to_mp3 and convert_epub_to_mp3, Form field in API, select UI with file size estimator",
-          "timestamp": "2026-02-21T20:12:59.315473Z",
-          "result": "success",
-          "learned": "",
-          "files_changed": [
-            "converter.py",
-            "app.py",
-            "templates/index.html",
-            "test_bitrate.py"
-          ]
-        }
-      ],
-      "status": "Complete",
-      "created_at": "2026-02-21T20:12:59.311179Z",
-      "updated_at": "2026-02-21T20:12:59.318984Z"
-    },
-    "obj_64d12a98": {
-      "id": "obj_64d12a98",
-      "description": "Mobile-responsive layout: full-screen usable on phone without horizontal scroll",
-      "user_experience": {
-        "visible": [
-          "Single column on screens < 768px",
-          "Jobs sidebar stacks below form on mobile",
-          "Touch-friendly tap targets (44px min)",
-          "Speed pills and option selects full-width on small screens"
-        ],
-        "behavior": [
-          "No horizontal overflow on 375px viewport"
-        ],
-        "performance": [
-          "No layout shift when jobs sidebar appears"
-        ]
+        "performance": []
       },
       "constraints": [],
       "examples": [],
@@ -68,13 +21,15 @@
         "existing_files": [
           "templates/index.html"
         ],
-        "must_not_change": [],
+        "must_not_change": [
+          "app.py API endpoints"
+        ],
         "can_modify": []
       },
       "attempts": [
         {
-          "approach": "Single-column below 900px, jobs sidebar stacks below form. 600px breakpoint: 2-col progress grid, larger touch targets, full-width controls.",
-          "timestamp": "2026-02-21T21:55:53.328072Z",
+          "approach": "Full rewrite of index.html removing all duplicate IDs/elements from multi-branch merge. Single clean DOM structure.",
+          "timestamp": "2026-02-21T21:55:53.316560Z",
           "result": "success",
           "learned": "",
           "files_changed": [
@@ -83,8 +38,8 @@
         }
       ],
       "status": "Complete",
-      "created_at": "2026-02-21T21:51:52.415678Z",
-      "updated_at": "2026-02-21T21:55:56.163306Z"
+      "created_at": "2026-02-21T21:51:43.671851Z",
+      "updated_at": "2026-02-21T21:55:56.155481Z"
     },
     "obj_7aff4add": {
       "id": "obj_7aff4add",
@@ -130,52 +85,6 @@
       "status": "Complete",
       "created_at": "2026-02-21T20:12:46.718932Z",
       "updated_at": "2026-02-21T20:12:46.727086Z"
-    },
-    "obj_8218ee68": {
-      "id": "obj_8218ee68",
-      "description": "Persist completed job download links via localStorage",
-      "user_experience": {
-        "visible": [
-          "Recent Conversions section below main form after first completion",
-          "Each entry shows title, author, date, download pill buttons",
-          "Expired label on pills when server files are gone",
-          "Clear history button"
-        ],
-        "behavior": [
-          "Saves last 10 completed jobs to localStorage",
-          "HEAD-checks each download URL on render to detect expired files",
-          "History survives page refresh"
-        ],
-        "performance": [
-          "HEAD checks are async and non-blocking"
-        ]
-      },
-      "constraints": [],
-      "examples": [],
-      "context": {
-        "existing_files": [
-          "Download endpoint: GET /api/download/{job_id}/{filename}"
-        ],
-        "must_not_change": [],
-        "can_modify": [
-          "templates/index.html"
-        ]
-      },
-      "attempts": [
-        {
-          "approach": "localStorage JSON array, addHistoryEntry/renderHistory/checkFileAvailable functions, escapeHtml for XSS safety, integrated into showDownloads()",
-          "timestamp": "2026-02-21T20:12:32.102393Z",
-          "result": "success",
-          "learned": "",
-          "files_changed": [
-            "templates/index.html",
-            "test_history.py"
-          ]
-        }
-      ],
-      "status": "Complete",
-      "created_at": "2026-02-21T20:12:32.098376Z",
-      "updated_at": "2026-02-21T20:12:32.105654Z"
     },
     "obj_bb28cedd": {
       "id": "obj_bb28cedd",
@@ -224,46 +133,51 @@
       "created_at": "2026-02-21T20:12:18.673157Z",
       "updated_at": "2026-02-21T20:12:18.681390Z"
     },
-    "obj_3ca1c327": {
-      "id": "obj_3ca1c327",
-      "description": "Fix corrupted HTML: remove duplicate elements from multi-branch merge, restore single clean DOM structure",
+    "obj_8218ee68": {
+      "id": "obj_8218ee68",
+      "description": "Persist completed job download links via localStorage",
       "user_experience": {
         "visible": [
-          "One options card with voice, format, bitrate, speed, text-processing, checkboxes",
-          "Duration estimate inside chapters card, not sidebar",
-          "History section at bottom of main column"
+          "Recent Conversions section below main form after first completion",
+          "Each entry shows title, author, date, download pill buttons",
+          "Expired label on pills when server files are gone",
+          "Clear history button"
         ],
         "behavior": [
-          "No duplicate IDs in DOM",
-          "All controls visible and functional"
+          "Saves last 10 completed jobs to localStorage",
+          "HEAD-checks each download URL on render to detect expired files",
+          "History survives page refresh"
         ],
-        "performance": []
+        "performance": [
+          "HEAD checks are async and non-blocking"
+        ]
       },
       "constraints": [],
       "examples": [],
       "context": {
         "existing_files": [
+          "Download endpoint: GET /api/download/{job_id}/{filename}"
+        ],
+        "must_not_change": [],
+        "can_modify": [
           "templates/index.html"
-        ],
-        "must_not_change": [
-          "app.py API endpoints"
-        ],
-        "can_modify": []
+        ]
       },
       "attempts": [
         {
-          "approach": "Full rewrite of index.html removing all duplicate IDs/elements from multi-branch merge. Single clean DOM structure.",
-          "timestamp": "2026-02-21T21:55:53.316560Z",
+          "approach": "localStorage JSON array, addHistoryEntry/renderHistory/checkFileAvailable functions, escapeHtml for XSS safety, integrated into showDownloads()",
+          "timestamp": "2026-02-21T20:12:32.102393Z",
           "result": "success",
           "learned": "",
           "files_changed": [
-            "templates/index.html"
+            "templates/index.html",
+            "test_history.py"
           ]
         }
       ],
       "status": "Complete",
-      "created_at": "2026-02-21T21:51:43.671851Z",
-      "updated_at": "2026-02-21T21:55:56.155481Z"
+      "created_at": "2026-02-21T20:12:32.098376Z",
+      "updated_at": "2026-02-21T20:12:32.105654Z"
     },
     "obj_4d7edc01": {
       "id": "obj_4d7edc01",
@@ -304,53 +218,6 @@
       "status": "Complete",
       "created_at": "2026-02-21T21:51:47.765872Z",
       "updated_at": "2026-02-21T21:55:56.159533Z"
-    },
-    "obj_25d9d5d4": {
-      "id": "obj_25d9d5d4",
-      "description": "Fix TTS crash on long chapters by chunking text before synthesis",
-      "user_experience": {
-        "visible": [
-          "Long books convert successfully without crashing",
-          "Progress still updates per-chapter as before"
-        ],
-        "behavior": [
-          "Text split at sentence boundaries into chunks of ~500 words max",
-          "Audio chunks concatenated with a brief silence between sentences",
-          "If a single sentence exceeds the limit, split at word boundaries",
-          "Error in one chunk is surfaced cleanly, not a silent crash"
-        ],
-        "performance": [
-          "No noticeable quality degradation at chunk boundaries"
-        ]
-      },
-      "constraints": [],
-      "examples": [],
-      "context": {
-        "existing_files": [
-          "tts.py: generate_speech() calls model.generate_audio(voice_state, text) with full text — model hard-limits at ~1000 tokens causing tensor mismatch crash"
-        ],
-        "must_not_change": [
-          "generate_speech() public signature"
-        ],
-        "can_modify": [
-          "tts.py"
-        ]
-      },
-      "attempts": [
-        {
-          "approach": "Added _split_text_into_chunks() to tts.py: splits at sentence boundaries (regex on .!?;), falls back to word boundaries for sentences >100 words, concatenates audio with 100ms silence. Pre-chunking happens in generate_speech() before model.generate_audio() call.",
-          "timestamp": "2026-02-21T21:05:36.882897Z",
-          "result": "success",
-          "learned": "Pocket TTS model.generate_audio_stream() already calls split_into_best_sentences internally but fails when a single sentence has no punctuation and exceeds 1000 audio frames. Root cause: sequence_length=1000 in init_states() for the flow LM.",
-          "files_changed": [
-            "tts.py",
-            "test_speed.py"
-          ]
-        }
-      ],
-      "status": "Complete",
-      "created_at": "2026-02-21T21:03:02.636248Z",
-      "updated_at": "2026-02-21T21:05:36.890368Z"
     },
     "obj_f8fe072e": {
       "id": "obj_f8fe072e",
@@ -394,6 +261,51 @@
       "status": "Complete",
       "created_at": "2026-02-21T21:51:57.645512Z",
       "updated_at": "2026-02-21T21:55:56.166938Z"
+    },
+    "obj_13a3fc72": {
+      "id": "obj_13a3fc72",
+      "description": "MP3 output bitrate selection (64/128/192 kbps)",
+      "user_experience": {
+        "visible": [
+          "Bitrate dropdown: 64 kbps (small), 128 kbps (standard), 192 kbps (default)",
+          "Estimated file size shown below selector based on duration and bitrate"
+        ],
+        "behavior": [
+          "Bitrate threaded through: UI -> API -> convert_epub_to_mp3 -> convert_wav_to_mp3",
+          "Voice preview encoder stays at 128 kbps regardless"
+        ],
+        "performance": [
+          "No performance impact — just changes lameenc bit rate setting"
+        ]
+      },
+      "constraints": [],
+      "examples": [],
+      "context": {
+        "existing_files": [
+          "converter.py: convert_wav_to_mp3() uses lameenc, hardcoded 192kbps"
+        ],
+        "must_not_change": [],
+        "can_modify": [
+          "converter.py, app.py, templates/index.html"
+        ]
+      },
+      "attempts": [
+        {
+          "approach": "Added bitrate param to convert_wav_to_mp3 and convert_epub_to_mp3, Form field in API, select UI with file size estimator",
+          "timestamp": "2026-02-21T20:12:59.315473Z",
+          "result": "success",
+          "learned": "",
+          "files_changed": [
+            "converter.py",
+            "app.py",
+            "templates/index.html",
+            "test_bitrate.py"
+          ]
+        }
+      ],
+      "status": "Complete",
+      "created_at": "2026-02-21T20:12:59.311179Z",
+      "updated_at": "2026-02-21T20:12:59.318984Z"
     },
     "obj_25b26988": {
       "id": "obj_25b26988",
@@ -441,6 +353,94 @@
       "status": "Complete",
       "created_at": "2026-02-21T20:12:46.707239Z",
       "updated_at": "2026-02-21T20:12:46.714930Z"
+    },
+    "obj_64d12a98": {
+      "id": "obj_64d12a98",
+      "description": "Mobile-responsive layout: full-screen usable on phone without horizontal scroll",
+      "user_experience": {
+        "visible": [
+          "Single column on screens < 768px",
+          "Jobs sidebar stacks below form on mobile",
+          "Touch-friendly tap targets (44px min)",
+          "Speed pills and option selects full-width on small screens"
+        ],
+        "behavior": [
+          "No horizontal overflow on 375px viewport"
+        ],
+        "performance": [
+          "No layout shift when jobs sidebar appears"
+        ]
+      },
+      "constraints": [],
+      "examples": [],
+      "context": {
+        "existing_files": [
+          "templates/index.html"
+        ],
+        "must_not_change": [],
+        "can_modify": []
+      },
+      "attempts": [
+        {
+          "approach": "Single-column below 900px, jobs sidebar stacks below form. 600px breakpoint: 2-col progress grid, larger touch targets, full-width controls.",
+          "timestamp": "2026-02-21T21:55:53.328072Z",
+          "result": "success",
+          "learned": "",
+          "files_changed": [
+            "templates/index.html"
+          ]
+        }
+      ],
+      "status": "Complete",
+      "created_at": "2026-02-21T21:51:52.415678Z",
+      "updated_at": "2026-02-21T21:55:56.163306Z"
+    },
+    "obj_25d9d5d4": {
+      "id": "obj_25d9d5d4",
+      "description": "Fix TTS crash on long chapters by chunking text before synthesis",
+      "user_experience": {
+        "visible": [
+          "Long books convert successfully without crashing",
+          "Progress still updates per-chapter as before"
+        ],
+        "behavior": [
+          "Text split at sentence boundaries into chunks of ~500 words max",
+          "Audio chunks concatenated with a brief silence between sentences",
+          "If a single sentence exceeds the limit, split at word boundaries",
+          "Error in one chunk is surfaced cleanly, not a silent crash"
+        ],
+        "performance": [
+          "No noticeable quality degradation at chunk boundaries"
+        ]
+      },
+      "constraints": [],
+      "examples": [],
+      "context": {
+        "existing_files": [
+          "tts.py: generate_speech() calls model.generate_audio(voice_state, text) with full text — model hard-limits at ~1000 tokens causing tensor mismatch crash"
+        ],
+        "must_not_change": [
+          "generate_speech() public signature"
+        ],
+        "can_modify": [
+          "tts.py"
+        ]
+      },
+      "attempts": [
+        {
+          "approach": "Added _split_text_into_chunks() to tts.py: splits at sentence boundaries (regex on .!?;), falls back to word boundaries for sentences >100 words, concatenates audio with 100ms silence. Pre-chunking happens in generate_speech() before model.generate_audio() call.",
+          "timestamp": "2026-02-21T21:05:36.882897Z",
+          "result": "success",
+          "learned": "Pocket TTS model.generate_audio_stream() already calls split_into_best_sentences internally but fails when a single sentence has no punctuation and exceeds 1000 audio frames. Root cause: sequence_length=1000 in init_states() for the flow LM.",
+          "files_changed": [
+            "tts.py",
+            "test_speed.py"
+          ]
+        }
+      ],
+      "status": "Complete",
+      "created_at": "2026-02-21T21:03:02.636248Z",
+      "updated_at": "2026-02-21T21:05:36.890368Z"
     },
     "obj_355fbe43": {
       "id": "obj_355fbe43",
@@ -531,6 +531,46 @@
       "status": "Complete",
       "created_at": "2026-02-21T20:12:59.322625Z",
       "updated_at": "2026-02-21T20:12:59.330563Z"
+    },
+    "obj_75da3a63": {
+      "id": "obj_75da3a63",
+      "description": "Resilient audiobook conversion with resume support and persistent library",
+      "user_experience": {
+        "visible": [
+          "Resume button on failed/interrupted jobs that picks up from the last completed chunk",
+          "Persistent audiobook library panel showing all completed conversions with title, author, duration, and cover art",
+          "Library survives server restarts — stored on disk, not just in memory or localStorage",
+          "Progress indicator shows which chunks are already done when resuming"
+        ],
+        "behavior": [
+          "When a job fails or is interrupted, intermediate chunk files are preserved on disk",
+          "Resuming re-uses completed chunks and only re-processes failed/missing ones",
+          "Completed audiobooks are catalogued in a JSON manifest on disk with metadata",
+          "Library panel lets user download or re-download any past audiobook",
+          "Library entries include: title, author, file size, duration, date created, cover art thumbnail",
+          "Old library entries are not auto-deleted (user controls deletion)"
+        ],
+        "performance": [
+          "Resume should feel instant for the already-completed portion"
+        ]
+      },
+      "constraints": [],
+      "examples": [],
+      "context": {
+        "existing_files": [
+          "FastAPI app in app.py; conversion pipeline in converter.py; single-page HTML frontend in templates/index.html; job state currently in-memory dict; output files in temp dirs with 1hr TTL cleanup"
+        ],
+        "must_not_change": [
+          "SSE streaming API contract, existing /api/convert endpoint signature"
+        ],
+        "can_modify": [
+          "app.py, converter.py, templates/index.html, cli.py"
+        ]
+      },
+      "attempts": [],
+      "status": "NotStarted",
+      "created_at": "2026-02-25T16:49:52.869256Z",
+      "updated_at": "2026-02-25T16:49:52.869256Z"
     }
   }
 }

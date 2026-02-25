@@ -75,7 +75,7 @@ def convert(
     ),
 ):
     """Convert an EPUB file to audiobook(s)."""
-    from pocket_tts import TTSModel
+    from tts import load_model as _tts_load_model
 
     # Validate format
     format_lower = format.lower()
@@ -134,7 +134,7 @@ def convert(
 
     # Load TTS model
     with console.status("[bold green]Loading TTS model..."):
-        tts_model = TTSModel.load_model()
+        _tts_load_model()
     console.print("[green]✓[/green] Model loaded")
 
     # Convert with progress bar

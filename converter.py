@@ -440,18 +440,23 @@ def create_m4b_with_chapters(
 
         cmd.append(str(output_path))
 
+        total_samples = sum(len(audio) for _, audio in audio_segments)
+        total_duration_secs = total_samples / sample_rate
+        # Conservative: encode at 5x real-time (slow hardware / large files)
+        timeout = max(600, int(total_duration_secs / 5))
+
         try:
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=600  # 10 minute timeout
+                timeout=timeout,
             )
             if result.returncode != 0:
                 return (False, f"ffmpeg error: {result.stderr}")
             return (True, None)
         except subprocess.TimeoutExpired:
-            return (False, "ffmpeg timed out after 10 minutes")
+            return (False, f"ffmpeg timed out after {timeout // 60} minutes")
         except subprocess.SubprocessError as e:
             return (False, f"ffmpeg exception: {e}")
 
@@ -670,6 +675,16 @@ def convert_epub_to_mp3(
     # Calculate total words for progress tracking
     total_words = sum(len(ch.text.split()) for ch in selected_chapters)
     words_processed = 0
+
+    # Emit book metadata so the caller can promote title/author to top-level job fields
+    if progress_callback:
+        progress_callback(5, 100, f"Parsed: {book.title}", {
+            "stage": "initializing",
+            "book_title": book.title,
+            "book_author": book.author,
+            "chapter_total": len(selected_chapters),
+            "words_total": total_words,
+        })
 
     # Validate voice
     if voice not in VOICES:

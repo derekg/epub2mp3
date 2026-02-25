@@ -414,7 +414,7 @@ class TestCLIFormatValidation:
 
         # Stop after model load — we just want to verify format validation passes
         with patch("cli.is_ffmpeg_available", return_value=True), \
-             patch("pocket_tts.TTSModel.load_model", side_effect=RuntimeError("stop here")):
+             patch("tts.load_model", side_effect=RuntimeError("stop here")):
             runner = CliRunner()
             result = runner.invoke(cli_app, ["convert", str(epub), "--format", "mp3"])
 

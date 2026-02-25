@@ -118,9 +118,9 @@
 
         .job-card-header {
             display: flex;
-            align-items: flex-start;
+            align-items: center;
             gap: 10px;
-            margin-bottom: 10px;
+            margin-bottom: 4px;
         }
 
         .job-status-dot {
@@ -128,7 +128,6 @@
             height: 8px;
             border-radius: 50%;
             flex-shrink: 0;
-            margin-top: 5px;
             transition: background 0.3s;
         }
 
@@ -147,8 +146,8 @@
         }
 
         .job-card-info {
-            flex: 1;
             min-width: 0;
+            padding-left: 18px; /* align under title, past the status dot */
         }
 
         .job-card-title {
@@ -158,18 +157,39 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            flex: 1;
+            min-width: 0;
         }
 
-        .job-card-status {
-            font-size: 0.76rem;
+        .job-card-author {
+            font-size: 0.74rem;
             color: var(--text-muted);
-            margin-top: 2px;
+            font-style: italic;
+            margin-top: 1px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
-        .job-card-status.error-text { color: var(--error); }
+        .job-card-status {
+            font-size: 0.74rem;
+            color: var(--text-muted);
+            margin-top: 1px;
+            font-style: italic;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .job-card-status.error-text { color: var(--error); font-style: normal; }
+
+        /* Footer row for action buttons — right-aligned */
+        .job-card-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            margin-top: 6px;
+        }
 
         .job-pct {
             font-size: 0.75rem;
@@ -183,7 +203,7 @@
             background: var(--border);
             border-radius: 2px;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin: 8px 0 4px;
         }
 
         .job-progress-fill {
@@ -260,11 +280,11 @@
             cursor: pointer;
             padding: 4px 10px;
             margin-top: 8px;
-            width: 100%;
+            width: auto;
             transition: border-color 0.15s, color 0.15s;
         }
 
-        .job-cancel-btn.visible { display: block; }
+        .job-cancel-btn.visible { display: inline-block; }
 
         .job-cancel-btn:hover:not(:disabled) {
             border-color: var(--error);
@@ -288,11 +308,11 @@
             cursor: pointer;
             padding: 4px 10px;
             margin-top: 6px;
-            width: 100%;
+            width: auto;
             transition: border-color 0.15s, color 0.15s;
         }
 
-        .job-resume-btn.visible { display: block; }
+        .job-resume-btn.visible { display: inline-block; }
 
         .job-resume-btn:hover:not(:disabled) {
             border-color: var(--accent);
@@ -382,22 +402,25 @@
 
         .drop-zone {
             border: 2px dashed var(--border);
-            border-radius: 8px;
-            padding: 44px 24px;
+            border-radius: 10px;
+            padding: 40px 24px 36px;
             text-align: center;
             cursor: pointer;
-            transition: border-color 0.2s, background 0.2s;
+            transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
             background: var(--bg);
+            position: relative;
         }
 
         .drop-zone:hover {
-            border-color: var(--text-muted);
+            border-color: var(--text-secondary);
             background: #f5f5f5;
+            box-shadow: inset 0 0 0 3px rgba(0,0,0,0.03);
         }
 
         .drop-zone.dragover {
             border-color: var(--accent);
             background: #f0f0f0;
+            box-shadow: inset 0 0 0 3px rgba(0,0,0,0.04);
         }
 
         .drop-zone.has-file {
@@ -407,21 +430,27 @@
         }
 
         .drop-zone-icon {
-            width: 44px;
-            height: 44px;
-            margin: 0 auto 14px;
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 12px;
             color: var(--text-muted);
+            display: block;
+            transition: color 0.2s;
         }
+
+        .drop-zone:hover .drop-zone-icon { color: var(--text-secondary); }
+        .drop-zone.dragover .drop-zone-icon { color: var(--accent); }
 
         .drop-zone-text {
             color: var(--text-secondary);
-            font-size: 0.95rem;
+            font-size: 0.93rem;
+            font-weight: 500;
         }
 
         .drop-zone-hint {
             color: var(--text-muted);
-            font-size: 0.8rem;
-            margin-top: 6px;
+            font-size: 0.78rem;
+            margin-top: 5px;
         }
 
         .file-input { display: none; }
@@ -1041,6 +1070,25 @@
             letter-spacing: 0.04em;
         }
 
+        /* ── Job settings chips ───────────────────────────────── */
+
+        .job-settings-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin: 4px 0 6px;
+        }
+
+        .job-setting-chip {
+            font-size: 0.68rem;
+            color: var(--text-secondary);
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1px 7px;
+            white-space: nowrap;
+        }
+
         /* ── Footer ───────────────────────────────────────────── */
 
         footer {
@@ -1053,7 +1101,10 @@
         footer a { color: var(--text-secondary); text-decoration: none; }
         footer a:hover { text-decoration: underline; }
 
-        /* ── Responsive ───────────────────────────────────────── */
+        /* ── Responsive — Desktop (901px+) ────────────────────── */
+        /* (default styles above apply at all widths; overrides below) */
+
+        /* ── Responsive — Tablet (601px–900px) ───────────────── */
 
         @media (max-width: 900px) {
             .page-layout { flex-direction: column; }
@@ -1069,19 +1120,85 @@
             .jobs-sidebar-inner { border-radius: 12px; }
         }
 
-        @media (max-width: 600px) {
-            .container { padding: 28px 16px; }
-            .card { padding: 22px 18px; }
-            .logo { font-size: 2rem; }
+        @media (min-width: 601px) and (max-width: 900px) {
+            /* On tablet, show sidebar at a reduced but reasonable width inline */
+            .jobs-sidebar {
+                width: 100%;
+                padding: 0 24px 32px;
+            }
+        }
 
+        /* ── Responsive — Mobile (max-width: 600px) ──────────── */
+
+        @media (max-width: 600px) {
+            .container { padding: 20px 14px; }
+            .card { padding: 18px 16px; margin-bottom: 14px; }
+
+            /* Header: shrink logo, hide subtitle */
+            header { margin-bottom: 24px; }
+            .logo { font-size: 1.75rem; margin-bottom: 6px; }
+            .intro { display: none; }
+
+            /* Nav tabs: full-width pill row */
+            .nav-tabs {
+                gap: 0;
+                margin-bottom: 24px;
+                border: 1px solid var(--border);
+                border-radius: 22px;
+                overflow: hidden;
+                padding: 3px;
+                background: var(--bg);
+            }
+            .nav-tab {
+                flex: 1;
+                border: none;
+                border-radius: 18px;
+                padding: 8px 12px;
+                font-size: 0.88rem;
+                background: transparent;
+            }
+            .nav-tab.active {
+                background: var(--accent);
+                color: var(--surface);
+            }
+
+            /* Drop zone: less padding, improved touch target */
+            .drop-zone { padding: 28px 16px; }
+            .drop-zone-icon { width: 36px; height: 36px; margin-bottom: 10px; }
+            .drop-zone-text { font-size: 0.9rem; }
+
+            /* Options form: tighten spacing */
+            .option-group { margin-bottom: 16px; }
+            .option-group-title { margin-bottom: 7px; }
+            select { font-size: 0.84rem; padding: 9px 10px; }
+            .speed-control label { font-size: 0.74rem; padding: 9px 2px; }
+
+            /* Convert button: full width and more prominent */
+            .convert-btn {
+                width: 100%;
+                padding: 14px 20px;
+                font-size: 1rem;
+                margin-top: 18px;
+            }
+
+            /* Progress details: 2 columns on mobile */
             .progress-details {
                 grid-template-columns: repeat(2, 1fr);
                 gap: 10px;
             }
 
-            .speed-control label { font-size: 0.74rem; padding: 9px 2px; }
+            /* Library grid: 1 column below 480px handled separately */
+            .library-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .lib-card-title { font-size: 0.92rem; }
 
-            select { font-size: 0.84rem; }
+            /* Jobs sidebar: no extra side padding */
+            .jobs-sidebar { padding: 0 14px 24px; }
+        }
+
+        /* ── Responsive — Small mobile (max-width: 480px) ────── */
+
+        @media (max-width: 480px) {
+            .library-grid { grid-template-columns: 1fr; gap: 12px; }
         }
 
         /* Reduced motion */
@@ -1392,11 +1509,6 @@
         }
 
         .library-empty p { margin-top: 6px; font-size: 0.84rem; }
-
-        @media (max-width: 600px) {
-            .library-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-            .lib-card-title { font-size: 0.92rem; }
-        }
     </style>
 </head>
 <body>
@@ -1502,7 +1614,7 @@
                         <div class="option-row">
                             <select id="formatSelect">
                                 <option value="mp3">MP3 (separate files per chapter)</option>
-                                <option value="m4b" id="m4bOption" disabled>M4B audiobook (single file with chapters)</option>
+                                <option value="m4b" id="m4bOption" selected disabled>M4B audiobook (single file with chapters)</option>
                             </select>
                         </div>
                     </div>
@@ -1512,8 +1624,8 @@
                         <div class="option-row">
                             <select id="bitrateSelect">
                                 <option value="64">64 kbps — small file</option>
-                                <option value="128">128 kbps — standard</option>
-                                <option value="192" selected>192 kbps — high quality</option>
+                                <option value="128" selected>128 kbps — standard</option>
+                                <option value="192">192 kbps — high quality</option>
                             </select>
                         </div>
                         <div class="processing-note" id="bitrateNote"></div>
@@ -1758,28 +1870,49 @@
         // Map jobId → { id, title, status, progress, message, files, cardEl }
         const jobQueue = new Map();
 
-        function addJob(jobId, title) {
+        function renderSettingsChips(settings) {
+            if (!settings || Object.keys(settings).length === 0) return '';
+            const chips = [];
+            if (settings.voice) chips.push(escapeHtml(settings.voice));
+            if (settings.output_format) chips.push(settings.output_format.toUpperCase());
+            if (settings.speed && settings.speed !== 1.0) chips.push(`${settings.speed}×`);
+            if (settings.text_processing && settings.text_processing !== 'none') chips.push(escapeHtml(settings.text_processing));
+            if (settings.bitrate) chips.push(`${settings.bitrate}kbps`);
+            return chips.map(c => `<span class="job-setting-chip">${c}</span>`).join('');
+        }
+
+        function addJob(jobId, title, opts = {}) {
+            const author   = opts.author   || '';
+            const settings = opts.settings || {};
+            const status   = opts.status   || 'processing';
+            const progress = opts.progress || 0;
+            const chipsHtml = renderSettingsChips(settings);
             const card = document.createElement('div');
             card.className = 'job-card';
             card.id = `job-${jobId}`;
             card.innerHTML = `
                 <div class="job-card-header">
-                    <span class="job-status-dot processing" id="dot-${jobId}"></span>
-                    <div class="job-card-info">
-                        <div class="job-card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
-                        <div class="job-card-status" id="st-${jobId}">Starting…</div>
-                    </div>
-                    <span class="job-pct" id="pct-${jobId}">0%</span>
+                    <span class="job-status-dot ${status === 'processing' ? 'processing' : status}" id="dot-${jobId}"></span>
+                    <div class="job-card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
+                    <span class="job-pct" id="pct-${jobId}">${progress}%</span>
+                </div>
+                <div class="job-card-info">
+                    ${author ? `<div class="job-card-author">${escapeHtml(author)}</div>` : ''}
+                    <div class="job-card-status" id="st-${jobId}">${status === 'processing' ? 'Starting…' : (status === 'complete' ? 'Complete' : status)}</div>
                 </div>
                 <div class="job-progress-bar">
-                    <div class="job-progress-fill" id="fill-${jobId}"></div>
+                    <div class="job-progress-fill" id="fill-${jobId}" style="width:${progress}%"></div>
                 </div>
+                <div class="job-settings-row" id="chips-${jobId}">${chipsHtml}</div>
+                <div class="job-summary-row" id="summary-${jobId}"></div>
                 <div class="job-downloads" id="dl-${jobId}">
                     <div class="job-download-links" id="links-${jobId}"></div>
                 </div>
                 <div class="job-error-msg" id="err-${jobId}"></div>
-                <button class="job-cancel-btn visible" id="cancel-${jobId}" title="Cancel this job">Cancel</button>
-                <button class="job-resume-btn" id="resume-${jobId}" title="Resume from last checkpoint">Resume</button>
+                <div class="job-card-footer">
+                    <button class="job-cancel-btn visible" id="cancel-${jobId}" title="Cancel this job">Cancel</button>
+                    <button class="job-resume-btn" id="resume-${jobId}" title="Resume from last checkpoint">Resume</button>
+                </div>
             `;
 
             jobsList.insertBefore(card, jobsList.firstChild);
@@ -1789,7 +1922,7 @@
             // Wire resume button
             card.querySelector(`#resume-${jobId}`).addEventListener('click', () => resumeJob(jobId));
 
-            jobQueue.set(jobId, { id: jobId, title, status: 'processing', progress: 0, files: [] });
+            jobQueue.set(jobId, { id: jobId, title, author, settings, status, progress, files: [] });
 
             // Make this the primary job shown in the main progress section
             primaryJobId = jobId;
@@ -1897,6 +2030,12 @@
             }
         }
 
+        function formatConversionTime(secs) {
+            if (!secs) return '';
+            const m = Math.floor(secs / 60), s = secs % 60;
+            return m > 0 ? `${m}m ${s}s` : `${s}s`;
+        }
+
         function updateJobCard(jobId, data) {
             const job = jobQueue.get(jobId);
             if (!job) return;
@@ -1906,6 +2045,31 @@
             job.message  = data.message;
             if (data.files) job.files = data.files;
             if (data.can_resume !== undefined) job.can_resume = data.can_resume;
+
+            // Promote title/author from details if not yet set
+            if (data.details) {
+                if (data.details.book_title && !job.title) {
+                    job.title = data.details.book_title;
+                    job.author = data.details.book_author || '';
+                    const titleEl = document.querySelector(`#job-${jobId} .job-card-title`);
+                    if (titleEl) { titleEl.textContent = job.title; titleEl.title = job.title; }
+                    // Inject author if not already present
+                    const infoEl = document.querySelector(`#job-${jobId} .job-card-info`);
+                    if (infoEl && job.author && !infoEl.querySelector('.job-card-author')) {
+                        const authorEl = document.createElement('div');
+                        authorEl.className = 'job-card-author';
+                        authorEl.textContent = job.author;
+                        infoEl.insertBefore(authorEl, infoEl.querySelector('.job-card-status'));
+                    }
+                }
+            }
+
+            // Update settings chips if we now have settings
+            if (data.settings && (!job.settings || Object.keys(job.settings).length === 0)) {
+                job.settings = data.settings;
+                const chipsEl = document.getElementById(`chips-${jobId}`);
+                if (chipsEl) chipsEl.innerHTML = renderSettingsChips(data.settings);
+            }
 
             // Mirror to main progress section if this is the primary job
             if (jobId === primaryJobId) updatePrimaryProgress(data);
@@ -1943,6 +2107,15 @@
                 if (cancelBtn) { cancelBtn.classList.remove('visible'); }
                 if (resumeBtn) { resumeBtn.classList.remove('visible'); }
 
+                // Show completion summary
+                if (summaryEl && data.summary) {
+                    const s = data.summary;
+                    const parts = [];
+                    if (s.chapter_count) parts.push(`${s.chapter_count} chapter${s.chapter_count !== 1 ? 's' : ''}`);
+                    if (s.conversion_time_seconds) parts.push(formatConversionTime(s.conversion_time_seconds));
+                    if (parts.length) { summaryEl.textContent = parts.join(' · '); summaryEl.classList.add('visible'); }
+                }
+
                 if (data.files && data.files.length > 0) {
                     links.innerHTML = '';
                     data.files.forEach(file => {
@@ -1970,8 +2143,7 @@
                 st.textContent = 'Failed';
                 fill.className = 'job-progress-fill error';
                 pct.textContent= '';
-                errEl.textContent = data.message;
-                errEl.classList.add('visible');
+                if (errEl) { errEl.textContent = data.message; errEl.classList.add('visible'); }
                 if (cancelBtn) { cancelBtn.classList.remove('visible'); }
                 if (resumeBtn && data.can_resume) { resumeBtn.classList.add('visible'); }
 
@@ -2346,8 +2518,17 @@
 
                 const data  = await response.json();
                 const jobId = data.job_id;
+                const jobSettings = {
+                    voice: voiceSelect.value,
+                    output_format: formatSelect.value,
+                    text_processing: textProcessingSelect.value,
+                    speed: parseFloat((document.querySelector('input[name="speed"]:checked') || {value: '1.0'}).value),
+                    bitrate: parseInt(bitrateSelect.value),
+                };
 
-                addJob(jobId, currentTitle);
+                addJob(jobId, currentTitle, { settings: jobSettings });
+                // Save to localStorage so reconnect can restore this job
+                addHistoryEntry({ jobId, title: currentTitle, author: '', settings: jobSettings, files: [], completedAt: null });
                 listenForProgress(jobId);
                 resetForm();
 
@@ -2447,6 +2628,8 @@
                     author: sj.author || existing.author || '',
                     files: sj.files && sj.files.length > 0 ? sj.files : (existing.files || []),
                     completedAt: sj.completed_at || existing.completedAt,
+                    settings: sj.settings || existing.settings || {},
+                    summary: sj.summary || existing.summary || null,
                 });
             });
 
@@ -2477,12 +2660,23 @@
 
                 const authorPart = entry.author ? `${escapeHtml(entry.author)} · ` : '';
                 const datePart   = formatHistoryDate(entry.completedAt);
+                const chipsHtml  = renderSettingsChips(entry.settings || {});
+                const summaryText = (() => {
+                    if (!entry.summary) return '';
+                    const s = entry.summary;
+                    const parts = [];
+                    if (s.chapter_count) parts.push(`${s.chapter_count} chapter${s.chapter_count !== 1 ? 's' : ''}`);
+                    if (s.conversion_time_seconds) parts.push(formatConversionTime(s.conversion_time_seconds));
+                    return parts.join(' · ');
+                })();
 
                 div.innerHTML = `
                     <div class="history-entry-header">
                         <div class="history-entry-title">${escapeHtml(entry.title)}</div>
                         <div class="history-entry-meta">${authorPart}${datePart}</div>
                     </div>
+                    ${chipsHtml ? `<div class="job-settings-row" style="margin-bottom:6px">${chipsHtml}</div>` : ''}
+                    ${summaryText ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px">${escapeHtml(summaryText)}</div>` : ''}
                     <div class="history-entry-files" data-jobid="${entry.jobId}"></div>
                 `;
 
@@ -2516,6 +2710,28 @@
             if (confirm('Clear all conversion history?')) clearHistory();
         });
 
+        // ── Reconnect in-progress jobs on page load ───────────────
+        async function reconnectInProgressJobs() {
+            try {
+                const res = await fetch('/api/jobs');
+                if (!res.ok) return;
+                const d = await res.json();
+                for (const sj of (d.jobs || [])) {
+                    if (sj.status !== 'processing') continue;
+                    if (jobQueue.has(sj.job_id)) continue; // Already tracked
+                    const title = sj.title || sj.job_id.slice(0, 8);
+                    addJob(sj.job_id, title, {
+                        author: sj.author || '',
+                        settings: sj.settings || {},
+                        status: 'processing',
+                        progress: sj.progress || 0,
+                    });
+                    listenForProgress(sj.job_id);
+                }
+            } catch (_) {}
+        }
+
+        reconnectInProgressJobs();
         renderHistory();
 
         // ── Library tab ───────────────────────────────────────────
