@@ -136,6 +136,8 @@ def _save_jobs_manifest():
         output_dir = job.get("output_dir")
         if output_dir is None:
             continue
+        # Check whether cover art was saved alongside the audio files
+        has_cover = (Path(str(output_dir)) / "cover.jpg").exists()
         entries.append({
             "job_id": job_id,
             "status": job["status"],
@@ -148,6 +150,8 @@ def _save_jobs_manifest():
             "author": job.get("author", ""),
             "checkpoint_dir": str(job["checkpoint_dir"]) if job.get("checkpoint_dir") else None,
             "can_resume": job.get("can_resume", False),
+            "settings": job.get("settings", {}),
+            "has_cover": has_cover,
         })
     JOBS_MANIFEST.write_text(json.dumps(entries, indent=2))
 
@@ -467,9 +471,16 @@ async def start_conversion(
     job_dir = Path(tempfile.mkdtemp(prefix=f"epub2mp3_{job_id}_"))
 
     # Get EPUB path from upload_id or direct upload
+    book_title = ""
+    book_author = ""
     if upload_id and upload_id in uploads:
         upload = uploads[upload_id]
         epub_path = upload["epub_path"]
+        # Grab title/author from already-parsed book metadata
+        book_obj = upload.get("book")
+        if book_obj:
+            book_title = getattr(book_obj, "title", "") or ""
+            book_author = getattr(book_obj, "author", "") or ""
         # Parse selected chapters
         chapter_indices = None
         if selected_chapters:
@@ -504,6 +515,16 @@ async def start_conversion(
         "completed_at": None,
         "checkpoint_dir": checkpoint_dir,
         "can_resume": False,
+        "title": book_title,
+        "author": book_author,
+        # Conversion settings (preserved in manifest for library display)
+        "settings": {
+            "voice": voice,
+            "output_format": output_format,
+            "bitrate": bitrate,
+            "speed": speed,
+            "text_processing": text_processing,
+        },
         # Detailed progress info
         "details": {
             "chapter_current": 0,
@@ -591,6 +612,10 @@ async def run_conversion(
             src = Path(job["output_dir"]) / filename
             if src.exists():
                 shutil.copy2(src, persistent_dir / filename)
+        # Copy cover art if present
+        cover_src = Path(job["output_dir"]) / "cover.jpg"
+        if cover_src.exists():
+            shutil.copy2(cover_src, persistent_dir / "cover.jpg")
         job["output_dir"] = persistent_dir
 
         # Clean up temp working dir (EPUB + intermediate files) to free space
@@ -629,6 +654,118 @@ async def run_conversion(
         # Preserve checkpoint_dir for resume — do not clean it up
         _save_jobs_manifest()
 
+
+# ---------------------------------------------------------------------------
+# Library endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/library")
+async def get_library():
+    """Return all completed audiobooks from persistent storage."""
+    library = []
+
+    # Load manifest entries
+    manifest_entries: dict[str, dict] = {}
+    if JOBS_MANIFEST.exists():
+        try:
+            data = json.loads(JOBS_MANIFEST.read_text())
+            for entry in data:
+                job_id = entry.get("job_id")
+                if job_id:
+                    manifest_entries[job_id] = entry
+        except Exception:
+            pass
+
+    # Also include in-memory jobs that may not have been written yet
+    for job_id, job in jobs.items():
+        if job.get("status") == "complete" and job_id not in manifest_entries:
+            manifest_entries[job_id] = {
+                "job_id": job_id,
+                "status": "complete",
+                "title": job.get("title", ""),
+                "author": job.get("author", ""),
+                "files": job.get("files", []),
+                "completed_at": job.get("completed_at"),
+                "output_dir": str(job.get("output_dir", OUTPUT_DIR / job_id)),
+                "settings": job.get("settings", {}),
+            }
+
+    for job_id, entry in manifest_entries.items():
+        if entry.get("status") != "complete":
+            continue
+
+        output_dir = Path(entry.get("output_dir", str(OUTPUT_DIR / job_id)))
+        if not output_dir.exists():
+            continue
+
+        # Only include files that actually exist on disk
+        existing_files = []
+        file_sizes = {}
+        for filename in entry.get("files", []):
+            fpath = output_dir / filename
+            if fpath.exists():
+                size = fpath.stat().st_size
+                existing_files.append(filename)
+                file_sizes[filename] = size
+
+        if not existing_files:
+            continue
+
+        total_size = sum(file_sizes.values())
+        has_cover = (output_dir / "cover.jpg").exists()
+        cover_url = f"/api/library/{job_id}/cover" if has_cover else None
+
+        library.append({
+            "job_id": job_id,
+            "title": entry.get("title", ""),
+            "author": entry.get("author", ""),
+            "completed_at": entry.get("completed_at"),
+            "files": existing_files,
+            "file_sizes": file_sizes,
+            "total_size_bytes": total_size,
+            "has_cover": has_cover,
+            "cover_url": cover_url,
+            "settings": entry.get("settings", {}),
+        })
+
+    library.sort(key=lambda x: x.get("completed_at") or 0, reverse=True)
+    return {"library": library}
+
+
+@app.get("/api/library/{job_id}/cover")
+async def get_library_cover(job_id: str):
+    """Serve the cover art for a library entry."""
+    cover_path = OUTPUT_DIR / job_id / "cover.jpg"
+    if not cover_path.exists():
+        raise HTTPException(status_code=404, detail="Cover not found")
+    return FileResponse(str(cover_path), media_type="image/jpeg")
+
+
+@app.delete("/api/library/{job_id}")
+async def delete_library_entry(job_id: str):
+    """Delete a library entry and all its files from disk."""
+    job_dir = OUTPUT_DIR / job_id
+    if not job_dir.exists() and job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Library entry not found")
+
+    # Remove files from disk
+    if job_dir.exists():
+        shutil.rmtree(job_dir, ignore_errors=True)
+
+    # Remove from in-memory jobs
+    if job_id in jobs:
+        del jobs[job_id]
+
+    # Remove from manifest
+    if JOBS_MANIFEST.exists():
+        try:
+            data = json.loads(JOBS_MANIFEST.read_text())
+            data = [e for e in data if e.get("job_id") != job_id]
+            JOBS_MANIFEST.write_text(json.dumps(data, indent=2))
+        except Exception:
+            pass
+
+    return {"deleted": True, "job_id": job_id}
 
 
 @app.delete("/api/cancel/{job_id}")

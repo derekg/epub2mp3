@@ -644,6 +644,14 @@ def convert_epub_to_mp3(
 
     book = parse_epub(epub_path)
 
+    # Save cover art as cover.jpg so the library endpoint can serve it
+    if book.cover_image:
+        cover_path = output_dir / "cover.jpg"
+        try:
+            cover_path.write_bytes(book.cover_image)
+        except Exception:
+            pass  # Non-fatal; cover art is still embedded in the audio files
+
     if not book.chapters:
         raise ValueError("No readable chapters found in EPUB")
 
