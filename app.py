@@ -35,6 +35,7 @@ jobs: dict = {}
 # Persistent output directory — survives server restarts
 OUTPUT_DIR = Path.home() / "epub2mp3_output"
 JOBS_MANIFEST = OUTPUT_DIR / "jobs.json"
+CHECKPOINTS_DIR = OUTPUT_DIR / "checkpoints"
 
 # Load TTS model at startup
 if is_tts_available():
@@ -126,11 +127,11 @@ async def cleanup_loop():
 
 
 def _save_jobs_manifest():
-    """Write all completed jobs to ~/epub2mp3_output/jobs.json."""
+    """Write all completed/failed/cancelled jobs to ~/epub2mp3_output/jobs.json."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     entries = []
     for job_id, job in jobs.items():
-        if job.get("status") not in ("complete", "error"):
+        if job.get("status") not in ("complete", "error", "cancelled"):
             continue
         output_dir = job.get("output_dir")
         if output_dir is None:
@@ -145,12 +146,14 @@ def _save_jobs_manifest():
             "output_dir": str(output_dir),
             "title": job.get("title", ""),
             "author": job.get("author", ""),
+            "checkpoint_dir": str(job["checkpoint_dir"]) if job.get("checkpoint_dir") else None,
+            "can_resume": job.get("can_resume", False),
         })
     JOBS_MANIFEST.write_text(json.dumps(entries, indent=2))
 
 
 def _load_persisted_jobs():
-    """Restore completed jobs from ~/epub2mp3_output/jobs.json on startup."""
+    """Restore completed/failed/cancelled jobs from ~/epub2mp3_output/jobs.json on startup."""
     if not JOBS_MANIFEST.exists():
         return
     try:
@@ -161,11 +164,14 @@ def _load_persisted_jobs():
             if not job_id or job_id in jobs:
                 continue
             output_dir = Path(entry["output_dir"])
-            if not output_dir.exists():
-                continue  # Files gone, skip
+            # For error/cancelled jobs output_dir may not exist — that's fine
+            if not output_dir.exists() and entry.get("status") == "complete":
+                continue  # Files gone for completed jobs, skip
+            checkpoint_dir_str = entry.get("checkpoint_dir")
+            checkpoint_dir = Path(checkpoint_dir_str) if checkpoint_dir_str else None
             jobs[job_id] = {
                 "status": entry["status"],
-                "progress": entry.get("progress", 100),
+                "progress": entry.get("progress", 0),
                 "message": entry.get("message", ""),
                 "files": entry.get("files", []),
                 "completed_at": entry.get("completed_at"),
@@ -173,10 +179,12 @@ def _load_persisted_jobs():
                 "job_dir": None,  # No temp dir for persisted jobs
                 "title": entry.get("title", ""),
                 "author": entry.get("author", ""),
+                "checkpoint_dir": checkpoint_dir,
+                "can_resume": entry.get("can_resume", False),
             }
             loaded += 1
         if loaded:
-            print(f"[persist] Restored {loaded} completed jobs from disk")
+            print(f"[persist] Restored {loaded} jobs from disk")
     except Exception as e:
         print(f"[persist] Failed to load jobs manifest: {e}")
 
@@ -188,6 +196,10 @@ app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), na
 @app.on_event("startup")
 async def startup_event():
     """Run one-time stale dir cleanup and start the background cleanup loop."""
+    # Ensure persistent directories exist
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
+
     # Restore persisted completed jobs
     _load_persisted_jobs()
 
@@ -475,6 +487,12 @@ async def start_conversion(
     else:
         raise HTTPException(status_code=400, detail="No EPUB file provided")
 
+    # Create checkpoint directory and preserve a copy of the EPUB for resume
+    checkpoint_dir = CHECKPOINTS_DIR / job_id
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    epub_checkpoint_copy = checkpoint_dir / "input.epub"
+    shutil.copy2(epub_path, epub_checkpoint_copy)
+
     # Initialize job state with detailed progress tracking
     jobs[job_id] = {
         "status": "processing",
@@ -484,6 +502,8 @@ async def start_conversion(
         "job_dir": job_dir,
         "files": [],
         "completed_at": None,
+        "checkpoint_dir": checkpoint_dir,
+        "can_resume": False,
         # Detailed progress info
         "details": {
             "chapter_current": 0,
@@ -508,7 +528,8 @@ async def start_conversion(
 
     # Run conversion in background
     task = asyncio.create_task(run_conversion(
-        job_id, epub_path, voice, per_chapter, chapter_indices, skip_existing, announce_chapters, output_format, text_processing, speed, bitrate
+        job_id, epub_path, voice, per_chapter, chapter_indices, skip_existing,
+        announce_chapters, output_format, text_processing, speed, bitrate, checkpoint_dir
     ))
     jobs[job_id]["task"] = task
 
@@ -527,6 +548,7 @@ async def run_conversion(
     text_processing: str = "none",
     speed: float = 1.0,
     bitrate: int = 192,
+    checkpoint_dir: Path = None,
 ):
     """Run the conversion in the background using Kokoro TTS."""
     job = jobs[job_id]
@@ -552,6 +574,7 @@ async def run_conversion(
             text_processing,
             speed,
             bitrate,
+            checkpoint_dir,
         )
 
         job["status"] = "complete"
@@ -559,6 +582,7 @@ async def run_conversion(
         job["files"] = [Path(f).name for f in output_files]
         job["progress"] = 100
         job["message"] = "Conversion complete!"
+        job["can_resume"] = False
 
         # Copy output files to persistent directory so they survive restarts
         persistent_dir = OUTPUT_DIR / job_id
@@ -575,17 +599,25 @@ async def run_conversion(
             shutil.rmtree(temp_job_dir, ignore_errors=True)
         job["job_dir"] = None
 
+        # Checkpoint no longer needed once conversion is complete
+        if checkpoint_dir and Path(str(checkpoint_dir)).exists():
+            shutil.rmtree(checkpoint_dir, ignore_errors=True)
+        job["checkpoint_dir"] = None
+
         _save_jobs_manifest()
 
     except asyncio.CancelledError:
         job["status"] = "cancelled"
+        job["completed_at"] = time.time()
         job["message"] = "Cancelled"
         job["progress"] = 0
-        # Clean up temp output directory
+        job["can_resume"] = True
+        # Clean up temp output directory (keep checkpoint for resume)
         try:
             shutil.rmtree(job["output_dir"], ignore_errors=True)
         except Exception:
             pass
+        _save_jobs_manifest()
         raise  # Re-raise so asyncio knows the task was cancelled
 
     except Exception as e:
@@ -593,6 +625,9 @@ async def run_conversion(
         job["completed_at"] = time.time()
         job["message"] = str(e)
         job["progress"] = 0
+        job["can_resume"] = True
+        # Preserve checkpoint_dir for resume — do not clean it up
+        _save_jobs_manifest()
 
 
 
@@ -616,6 +651,100 @@ async def cancel_job(job_id: str):
     job["message"] = "Cancelled"
 
     return {"status": "cancelled"}
+
+
+@app.post("/api/resume/{job_id}")
+async def resume_job(job_id: str):
+    """Resume a failed or cancelled conversion from its last checkpoint."""
+    # Look up job in memory or manifest
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.get("status") not in ("error", "cancelled"):
+        raise HTTPException(status_code=400, detail=f"Job cannot be resumed (status: {job['status']})")
+
+    if not job.get("can_resume"):
+        raise HTTPException(status_code=400, detail="Job has no checkpoint data available for resume")
+
+    checkpoint_dir = job.get("checkpoint_dir")
+    if checkpoint_dir is None:
+        raise HTTPException(status_code=400, detail="Checkpoint directory not recorded for this job")
+
+    checkpoint_dir = Path(str(checkpoint_dir))
+    checkpoint_file = checkpoint_dir / "checkpoint.json"
+    if not checkpoint_file.exists():
+        raise HTTPException(status_code=400, detail="Checkpoint file not found")
+
+    # Read checkpoint to get the preserved EPUB path
+    try:
+        cp_data = json.loads(checkpoint_file.read_text())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read checkpoint: {e}")
+
+    # The EPUB is preserved in the checkpoint directory
+    epub_checkpoint_copy = checkpoint_dir / "input.epub"
+    if not epub_checkpoint_copy.exists():
+        raise HTTPException(status_code=400, detail="EPUB file not found in checkpoint — cannot resume")
+
+    # Extract original conversion settings from checkpoint
+    settings = cp_data.get("settings", {})
+    voice = settings.get("voice", DEFAULT_VOICE)
+    output_format = settings.get("output_format", "mp3")
+    bitrate = settings.get("bitrate", 192)
+    speed = settings.get("speed", 1.0)
+    text_processing = settings.get("text_processing", "none")
+
+    # Create a new job that reuses the existing checkpoint directory
+    new_job_id = str(uuid.uuid4())
+    new_job_dir = Path(tempfile.mkdtemp(prefix=f"epub2mp3_{new_job_id}_"))
+
+    # Count how many chapters are already done for the toast message
+    chapters_done = sum(
+        1 for v in cp_data.get("chapters", {}).values()
+        if v.get("status") == "done"
+    )
+
+    jobs[new_job_id] = {
+        "status": "processing",
+        "progress": 0,
+        "message": f"Resuming from chapter {chapters_done + 1}...",
+        "output_dir": new_job_dir / "output",
+        "job_dir": new_job_dir,
+        "files": [],
+        "completed_at": None,
+        "checkpoint_dir": checkpoint_dir,
+        "can_resume": False,
+        "title": job.get("title", ""),
+        "author": job.get("author", ""),
+        "details": {
+            "chapter_current": chapters_done,
+            "chapter_total": len(cp_data.get("chapters", {})),
+            "chapter_title": "",
+            "stage": "initializing",
+            "start_time": time.time(),
+            "words_processed": 0,
+            "words_total": 0,
+        },
+    }
+
+    task = asyncio.create_task(run_conversion(
+        new_job_id,
+        str(epub_checkpoint_copy),
+        voice,
+        per_chapter=True,  # checkpoint only supports per-chapter
+        chapter_indices=None,
+        skip_existing=False,
+        announce_chapters=False,
+        output_format=output_format,
+        text_processing=text_processing,
+        speed=speed,
+        bitrate=bitrate,
+        checkpoint_dir=checkpoint_dir,
+    ))
+    jobs[new_job_id]["task"] = task
+
+    return {"new_job_id": new_job_id, "chapters_done": chapters_done}
 
 
 @app.get("/api/status/{job_id}")
@@ -674,6 +803,7 @@ async def stream_progress(job_id: str):
                     "progress": job["progress"],
                     "message": job["message"],
                     "files": job.get("files", []),
+                    "can_resume": job.get("can_resume", False),
                     "details": {
                         **details,
                         "elapsed_seconds": int(elapsed),
@@ -683,7 +813,7 @@ async def stream_progress(job_id: str):
                 })
                 yield f"data: {data}\n\n"
 
-                if job["status"] in ["complete", "error"]:
+                if job["status"] in ["complete", "error", "cancelled"]:
                     break
 
             await asyncio.sleep(0.5)

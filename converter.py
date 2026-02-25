@@ -1,5 +1,6 @@
 """EPUB parsing and TTS conversion module."""
 
+import json
 import re
 import shutil
 import subprocess
@@ -547,6 +548,32 @@ def add_id3_tags(
     tags.save(mp3_path)
 
 
+def _load_checkpoint(checkpoint_dir: Path) -> dict:
+    """Load checkpoint data from checkpoint_dir/checkpoint.json.
+
+    Returns a dict with a "chapters" key mapping str(idx) -> {"status": ..., "filename": ...}.
+    Returns empty dict if file does not exist or is corrupt.
+    """
+    cp_file = checkpoint_dir / "checkpoint.json"
+    if not cp_file.exists():
+        return {}
+    try:
+        return json.loads(cp_file.read_text())
+    except Exception:
+        return {}
+
+
+def _save_checkpoint(checkpoint_dir: Path, data: dict) -> None:
+    """Atomically write checkpoint data to checkpoint_dir/checkpoint.json."""
+    cp_file = checkpoint_dir / "checkpoint.json"
+    tmp_file = checkpoint_dir / "checkpoint.json.tmp"
+    try:
+        tmp_file.write_text(json.dumps(data, indent=2))
+        tmp_file.rename(cp_file)
+    except Exception:
+        pass  # Best-effort — don't crash the conversion on checkpoint errors
+
+
 def convert_epub_to_mp3(
     epub_path: str,
     output_dir: str,
@@ -560,6 +587,7 @@ def convert_epub_to_mp3(
     text_processing: str = "none",
     speed: float = 1.0,
     bitrate: int = 192,
+    checkpoint_dir: Path | None = None,
 ) -> list[str]:
     """
     Convert an EPUB file to audio files (MP3 or M4B) using Kokoro TTS.
@@ -658,6 +686,33 @@ def convert_epub_to_mp3(
     total_chapters = len(selected_chapters)
     skipped_count = 0
 
+    # --- Checkpoint support --------------------------------------------------
+    # Load existing checkpoint (if resuming) or write an initial one.
+    checkpoint_data: dict = {}
+    if checkpoint_dir is not None:
+        checkpoint_dir = Path(checkpoint_dir)
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_data = _load_checkpoint(checkpoint_dir)
+
+        # Build the initial checkpoint structure on first run (all pending).
+        if "chapters" not in checkpoint_data:
+            checkpoint_data = {
+                "epub_path": str(epub_path),
+                "settings": {
+                    "voice": voice,
+                    "output_format": output_format,
+                    "bitrate": bitrate,
+                    "speed": speed,
+                    "text_processing": text_processing,
+                },
+                "chapters": {
+                    str(i): {"status": "pending", "filename": None}
+                    for i in range(total_chapters)
+                },
+            }
+            _save_checkpoint(checkpoint_dir, checkpoint_data)
+    # -------------------------------------------------------------------------
+
     if per_chapter:
         # One MP3 per chapter
         for idx, chapter in enumerate(selected_chapters):
@@ -677,6 +732,27 @@ def convert_epub_to_mp3(
                 "words_processed": words_processed,
                 "words_total": total_words,
             }
+
+            # --- Checkpoint resume: reuse already-encoded chapter files ------
+            if checkpoint_dir is not None:
+                cp_chapter = checkpoint_data.get("chapters", {}).get(str(idx), {})
+                if cp_chapter.get("status") == "done":
+                    cp_filename = cp_chapter.get("filename")
+                    cp_src = checkpoint_dir / cp_filename if cp_filename else None
+                    if cp_src and cp_src.exists() and cp_src.stat().st_size > 0:
+                        # Copy the cached MP3 into the output dir and skip TTS
+                        shutil.copy2(cp_src, output_path)
+                        skipped_count += 1
+                        words_processed += chapter_words
+                        if progress_callback:
+                            progress_callback(progress_pct, 100, f"Resuming (cached): {title[:30]}...", {
+                                **chapter_details,
+                                "stage": "skipping",
+                                "words_processed": words_processed,
+                            })
+                        output_files.append(str(output_path))
+                        continue
+            # -----------------------------------------------------------------
 
             # Skip if file exists and skip_existing is enabled
             if skip_existing and output_path.exists() and output_path.stat().st_size > 0:
@@ -758,6 +834,17 @@ def convert_epub_to_mp3(
                     cover_mime=book.cover_mime,
                 )
                 output_files.append(str(output_path))
+
+                # --- Checkpoint: persist the encoded chapter file ------------
+                if checkpoint_dir is not None:
+                    cp_dest = checkpoint_dir / filename
+                    shutil.copy2(output_path, cp_dest)
+                    checkpoint_data.setdefault("chapters", {})[str(idx)] = {
+                        "status": "done",
+                        "filename": filename,
+                    }
+                    _save_checkpoint(checkpoint_dir, checkpoint_data)
+                # -------------------------------------------------------------
 
             # Update words processed after chapter completes
             words_processed += chapter_words
