@@ -2234,6 +2234,14 @@
 
         // ── SSE listener ─────────────────────────────────────────
 
+        // ── Browser notifications ─────────────────────────────────
+        function notifyJobDone(title, body) {
+            if (Notification.permission !== 'granted') return;
+            try {
+                new Notification(title, { body, icon: '/static/favicon.svg' });
+            } catch (e) { /* Safari sometimes throws on icon URL */ }
+        }
+
         function listenForProgress(jobId) {
             const es = new EventSource(`/api/progress/${jobId}`);
 
@@ -2242,6 +2250,13 @@
                 updateJobCard(jobId, data);
                 if (data.status === 'complete' || data.status === 'error' || data.status === 'cancelled') {
                     es.close();
+                    const job = jobQueue.get(jobId);
+                    const bookTitle = job?.title || 'Audiobook';
+                    if (data.status === 'complete') {
+                        notifyJobDone(`✅ ${bookTitle}`, 'Ready to download');
+                    } else if (data.status === 'error') {
+                        notifyJobDone(`❌ ${bookTitle}`, data.message || 'Conversion failed');
+                    }
                 }
             };
 
@@ -2559,6 +2574,9 @@
         async function startConversion() {
             const selected = getSelectedChapters();
             if (selected.length === 0) { showError('Please select at least one chapter'); return; }
+
+            // Request notification permission on first conversion (natural moment to ask)
+            if (Notification.permission === 'default') Notification.requestPermission();
 
             const currentUploadId = uploadId;
             const currentTitle    = bookTitle.textContent || 'Untitled';
