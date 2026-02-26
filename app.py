@@ -1,6 +1,8 @@
 """FastAPI server for EPUB to MP3 conversion using Gemini TTS."""
 
 import asyncio
+import concurrent.futures
+import functools
 import json
 import shutil
 import tempfile
@@ -50,9 +52,15 @@ ORPHAN_TTL_SECONDS = 2 * 60 * 60           # Remove orphaned temp dirs after 2 h
 EPUB2MP3_TMP_PREFIX = "epub2mp3_"           # Prefix used by tempfile.mkdtemp calls
 
 # MLX runs on a single Metal GPU command queue and is not thread-safe for
-# concurrent inference. Serialize all TTS work behind a semaphore so multiple
-# simultaneous jobs queue up rather than racing on the GPU.
+# concurrent inference. Two layers of protection:
+# 1. TTS_GPU_SEMAPHORE (asyncio): prevents multiple jobs from starting TTS work
+#    at the same time at the coroutine level.
+# 2. TTS_EXECUTOR (single thread): ensures all MLX/Metal calls happen on the
+#    same OS thread. asyncio.to_thread() uses a pool where each job may land on
+#    a different thread; MLX has thread-local Metal state that causes a SIGABRT
+#    assertion failure when it migrates between threads between jobs.
 TTS_GPU_SEMAPHORE = asyncio.Semaphore(1)
+TTS_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="tts-worker")
 
 
 def _cleanup_orphaned_tmp_dirs(max_age_seconds: int = ORPHAN_TTL_SECONDS) -> int:
@@ -603,21 +611,25 @@ async def run_conversion(
         job["message"] = "Waiting for GPU..."
         async with TTS_GPU_SEMAPHORE:
             job["message"] = "Starting..."
-            output_files = await asyncio.to_thread(
-                convert_epub_to_mp3,
-                epub_path,
-                str(job["output_dir"]),
-                voice,
-                per_chapter,
-                progress_callback,
-                chapter_indices,
-                skip_existing,
-                announce_chapters,
-                output_format,
-                text_processing,
-                speed,
-                bitrate,
-                checkpoint_dir,
+            loop = asyncio.get_running_loop()
+            output_files = await loop.run_in_executor(
+                TTS_EXECUTOR,
+                functools.partial(
+                    convert_epub_to_mp3,
+                    epub_path,
+                    str(job["output_dir"]),
+                    voice,
+                    per_chapter,
+                    progress_callback,
+                    chapter_indices,
+                    skip_existing,
+                    announce_chapters,
+                    output_format,
+                    text_processing,
+                    speed,
+                    bitrate,
+                    checkpoint_dir,
+                ),
             )
 
         job["status"] = "complete"
