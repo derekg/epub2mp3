@@ -2231,7 +2231,56 @@
             if (count > 0) jobsSidebar.classList.add('visible');
         }
 
-        // ── SSE listener ─────────────────────────────────────────
+        // ── SSE listener (single shared connection for all jobs) ──────
+        // Using one shared /api/progress SSE avoids consuming all 6 of
+        // Chrome's HTTP/1.1 connection slots, which would block other
+        // requests (e.g. the Library fetch) while jobs are running.
+
+        let _sharedSSE = null;
+
+        function _ensureSharedSSE() {
+            if (_sharedSSE && _sharedSSE.readyState !== EventSource.CLOSED) return;
+
+            _sharedSSE = new EventSource('/api/progress');
+
+            _sharedSSE.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                const jobId = data.job_id;
+                if (!jobId) return;
+
+                updateJobCard(jobId, data);
+
+                if (data.status === 'complete' || data.status === 'error' || data.status === 'cancelled') {
+                    const job = jobQueue.get(jobId);
+                    const bookTitle = job?.title || 'Audiobook';
+                    if (data.status === 'complete') {
+                        notifyJobDone(`✅ ${bookTitle}`, 'Ready to download');
+                    } else if (data.status === 'error') {
+                        notifyJobDone(`❌ ${bookTitle}`, data.message || 'Conversion failed');
+                    }
+
+                    // Close shared SSE when no active jobs remain
+                    const hasActive = [...jobQueue.values()].some(
+                        j => j.status === 'processing' || j.status === 'queued'
+                    );
+                    if (!hasActive && _sharedSSE) {
+                        _sharedSSE.close();
+                        _sharedSSE = null;
+                    }
+                }
+            };
+
+            _sharedSSE.onerror = () => {
+                // EventSource auto-reconnects; only close if truly no active jobs
+                const hasActive = [...jobQueue.values()].some(
+                    j => j.status === 'processing' || j.status === 'queued'
+                );
+                if (!hasActive && _sharedSSE) {
+                    _sharedSSE.close();
+                    _sharedSSE = null;
+                }
+            };
+        }
 
         // ── Browser notifications ─────────────────────────────────
         function notifyJobDone(title, body) {
@@ -2242,30 +2291,7 @@
         }
 
         function listenForProgress(jobId) {
-            const es = new EventSource(`/api/progress/${jobId}`);
-
-            es.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                updateJobCard(jobId, data);
-                if (data.status === 'complete' || data.status === 'error' || data.status === 'cancelled') {
-                    es.close();
-                    const job = jobQueue.get(jobId);
-                    const bookTitle = job?.title || 'Audiobook';
-                    if (data.status === 'complete') {
-                        notifyJobDone(`✅ ${bookTitle}`, 'Ready to download');
-                    } else if (data.status === 'error') {
-                        notifyJobDone(`❌ ${bookTitle}`, data.message || 'Conversion failed');
-                    }
-                }
-            };
-
-            es.onerror = () => {
-                es.close();
-                const job = jobQueue.get(jobId);
-                if (job && job.status === 'processing') {
-                    updateJobCard(jobId, { status: 'error', progress: 0, message: 'Connection lost', files: [] });
-                }
-            };
+            _ensureSharedSSE();
         }
 
         // ── Capabilities & voices ────────────────────────────────

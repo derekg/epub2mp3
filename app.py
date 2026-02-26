@@ -1006,6 +1006,69 @@ async def stream_progress(job_id: str):
     )
 
 
+@app.get("/api/progress")
+async def stream_all_progress():
+    """Stream progress updates for all active jobs via a single shared SSE connection.
+
+    Avoids the HTTP/1.1 browser limit of 6 connections per host that occurs
+    when each job opens its own /api/progress/{job_id} stream.
+    Each event payload includes job_id so the client can route updates.
+    """
+    async def event_generator():
+        last_states: dict[str, tuple] = {}  # job_id -> (progress, message, status)
+
+        while True:
+            for job_id, job in list(jobs.items()):
+                if job["status"] not in ("processing", "queued", "complete", "error", "cancelled"):
+                    continue
+
+                state_key = (job["progress"], job["message"], job["status"])
+                if last_states.get(job_id) == state_key:
+                    continue
+                last_states[job_id] = state_key
+
+                details = job.get("details", {})
+                start_time = details.get("start_time", time.time())
+                elapsed = time.time() - start_time
+
+                words_processed = details.get("words_processed", 0)
+                words_total = details.get("words_total", 0)
+                estimated_remaining = None
+                words_per_sec = None
+                if elapsed > 30 and words_processed > 0 and words_total > 0:
+                    words_per_sec = words_processed / elapsed
+                    words_remaining = words_total - words_processed
+                    if words_per_sec > 0:
+                        estimated_remaining = max(0, words_remaining / words_per_sec)
+
+                data = json.dumps({
+                    "job_id": job_id,
+                    "status": job["status"],
+                    "progress": job["progress"],
+                    "message": job["message"],
+                    "files": job.get("files", []),
+                    "can_resume": job.get("can_resume", False),
+                    "details": {
+                        **details,
+                        "elapsed_seconds": int(elapsed),
+                        "estimated_remaining_seconds": int(estimated_remaining) if estimated_remaining is not None else None,
+                        "words_per_sec": round(words_per_sec, 1) if words_per_sec is not None else None,
+                    }
+                })
+                yield f"data: {data}\n\n"
+
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+
+
 @app.get("/api/download/{job_id}/{filename}")
 async def download_file(job_id: str, filename: str):
     """Download a generated audio file."""
