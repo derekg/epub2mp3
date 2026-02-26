@@ -1553,8 +1553,7 @@
                 <header>
                     <h1 class="logo">Inkvoice</h1>
                     <p class="intro">
-                        Convert any EPUB into a high-quality audiobook.
-                        AI-powered text-to-speech that actually sounds good.
+                        Turn any EPUB into a beautifully narrated audiobook.
                     </p>
                 </header>
 
@@ -2322,7 +2321,8 @@
                     group.voices.forEach(v => {
                         const opt = document.createElement('option');
                         opt.value = v.name;
-                        opt.textContent = `${v.name} — ${v.characteristic}`;
+                        const genderLabel = v.gender === 'M' ? 'Male' : 'Female';
+                        opt.textContent = `${v.name.charAt(0).toUpperCase() + v.name.slice(1)} — ${v.characteristic} · ${genderLabel}`;
                         if (v.name === data.default) opt.selected = true;
                         og.appendChild(opt);
                     });

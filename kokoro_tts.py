@@ -17,14 +17,14 @@ import numpy as np
 SAMPLE_RATE = 24000
 
 KOKORO_VOICES = {
-    "heart":   {"char": "Warm",       "gender": "F", "lang": "en-us", "id": "af_heart",   "best_for": "narration"},
-    "bella":   {"char": "Expressive", "gender": "F", "lang": "en-us", "id": "af_bella",   "best_for": "narration"},
-    "sarah":   {"char": "Clear",      "gender": "F", "lang": "en-us", "id": "af_sarah",   "best_for": "narration"},
-    "nova":    {"char": "Bright",     "gender": "F", "lang": "en-us", "id": "af_nova",    "best_for": "casual"},
-    "adam":    {"char": "Confident",  "gender": "M", "lang": "en-us", "id": "am_adam",    "best_for": "narration"},
-    "michael": {"char": "Deep",       "gender": "M", "lang": "en-us", "id": "am_michael", "best_for": "narration"},
-    "emma":    {"char": "British F",  "gender": "F", "lang": "en-gb", "id": "bf_emma",    "best_for": "narration"},
-    "george":  {"char": "British M",  "gender": "M", "lang": "en-gb", "id": "bm_george",  "best_for": "narration"},
+    "heart":   {"char": "Warm American",      "gender": "F", "lang": "en-us", "id": "af_heart",   "best_for": "narration"},
+    "bella":   {"char": "Expressive American", "gender": "F", "lang": "en-us", "id": "af_bella",   "best_for": "narration"},
+    "sarah":   {"char": "Clear American",      "gender": "F", "lang": "en-us", "id": "af_sarah",   "best_for": "narration"},
+    "nova":    {"char": "Bright & Upbeat",     "gender": "F", "lang": "en-us", "id": "af_nova",    "best_for": "casual"},
+    "adam":    {"char": "Confident American",  "gender": "M", "lang": "en-us", "id": "am_adam",    "best_for": "narration"},
+    "michael": {"char": "Deep American",       "gender": "M", "lang": "en-us", "id": "am_michael", "best_for": "narration"},
+    "emma":    {"char": "Warm British",        "gender": "F", "lang": "en-gb", "id": "bf_emma",    "best_for": "narration"},
+    "george":  {"char": "Classic British",     "gender": "M", "lang": "en-gb", "id": "bm_george",  "best_for": "narration"},
 }
 
 DEFAULT_KOKORO_VOICE = "george"

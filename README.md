@@ -1,36 +1,45 @@
 # Inkvoice
 
-Convert any EPUB into a high-quality audiobook using AI-powered text-to-speech.
+Turn any EPUB into a beautifully narrated audiobook using local AI text-to-speech.
 
-Uses [Pocket TTS](https://kyutai.org/blog/2026-01-13-pocket-tts) for local speech synthesis and [Gemini](https://ai.google.dev/) for intelligent text processing.
-
-![Inkvoice UI](docs/screenshots/inkvoice-ui.png)
+Uses [Kokoro TTS](https://huggingface.co/hexgrad/Kokoro-82M) for on-device speech synthesis and [Gemini](https://ai.google.dev/) for optional text processing.
 
 ## Features
 
-- **Web interface** - Clean, modern UI with drag-and-drop
-- **CLI** - Batch convert from the command line
-- **8 built-in voices** - Alba, Marius, Javert, Jean, Fantine, Cosette, Eponine, Azelma
-- **Voice preview** - Listen to voices before converting
-- **Custom voice cloning** - Use any WAV file to clone a voice (CLI only)
-- **Chapter selection** - Choose which chapters to convert
-- **Estimated listening time** - See duration estimate before converting, updates per chapter selection
-- **Narration speed** - 0.75×, 1×, 1.25×, 1.5×, 2× playback speed
-- **Bitrate selection** - 64 / 128 / 192 kbps output with estimated file size
-- **Multi-job queue** - Convert multiple books in parallel, track all jobs in a sidebar
-- **Cancel conversion** - Stop an in-progress job at any time
-- **Job history** - Completed downloads persist across page refreshes via localStorage
-- **Smart EPUB parsing** - TOC-first parsing with intelligent chapter detection
-- **Front/back matter detection** - Auto-deselects title pages, copyright, acknowledgements
-- **Cover art display** - Shows book cover in the web UI
-- **M4B audiobook format** - Single file with embedded chapter markers (requires ffmpeg)
-- **MP3 with metadata** - ID3 tags with title, author, chapter, and cover art
-- **Chapter announcements** - Optionally speak chapter titles
-- **Auto cleanup** - Completed jobs and temp files cleaned up automatically after 1 hour
-- **AI text processing** - Powered by Gemini 3 Flash:
-  - **Narration-ready** - Remove footnotes, URLs, figure references
-  - **Condensed** - ~30% shorter while preserving key information
-  - **Key points** - ~10% summary of main ideas
+- **Web interface** — Clean, responsive UI with drag-and-drop; works on mobile and tablet
+- **CLI** — Batch convert from the command line
+- **8 voices** — American and British, male and female (see below)
+- **Voice preview** — Audition each voice before committing to a long conversion
+- **Chapter selection** — Choose exactly which chapters to include
+- **Estimated listening time** — Updates live as you select or deselect chapters
+- **Narration speed** — 0.75×, 1×, 1.25×, 1.5×, 2×
+- **Bitrate selection** — 64 / 128 / 192 kbps
+- **M4B audiobook format** — Single file with embedded chapter markers (requires ffmpeg)
+- **MP3 with metadata** — ID3 tags with title, author, chapter number, and cover art
+- **Multi-job queue** — Convert multiple books simultaneously; track all jobs in a sidebar
+- **Resume interrupted jobs** — Checkpoint system saves per-chapter progress; pick up where you left off after a failure or restart
+- **Persistent library** — Browse all completed audiobooks with cover art, duration, and one-click download
+- **Cancel conversion** — Stop any in-progress job at any time
+- **Chapter announcements** — Optionally speak chapter titles
+- **Auto cleanup** — Temp files cleaned up automatically
+- **Browser notifications** — Get notified when a book finishes, even with the tab in the background
+- **AI text processing** — Powered by Gemini:
+  - **Narration-ready** — Remove footnotes, URLs, figure captions
+  - **Condensed** — ~30% shorter while preserving key information
+  - **Key points** — ~10% summary of main ideas
+
+## Voices
+
+| Name | Character | Gender | Accent |
+|------|-----------|--------|--------|
+| George ⭐ | Classic British | Male | British |
+| Emma | Warm British | Female | British |
+| Heart | Warm American | Female | American |
+| Bella | Expressive American | Female | American |
+| Sarah | Clear American | Female | American |
+| Adam | Confident American | Male | American |
+| Michael | Deep American | Male | American |
+| Nova | Bright & Upbeat | Female | American |
 
 ## Requirements
 
@@ -41,19 +50,16 @@ Uses [Pocket TTS](https://kyutai.org/blog/2026-01-13-pocket-tts) for local speec
 ## Installation
 
 ```bash
-# Clone the repo
 git clone https://github.com/derekg/epub2mp3.git
 cd epub2mp3
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Optional: Install ffmpeg for M4B support
-brew install ffmpeg  # macOS
-# or: apt install ffmpeg  # Linux
+# Optional: M4B support
+brew install ffmpeg       # macOS
+apt install ffmpeg        # Linux
 
-# Optional: Set up Gemini for text processing
-echo "GEMINI_API_KEY=your_api_key_here" > .env
+# Optional: Gemini text processing
+echo "GEMINI_API_KEY=your_key_here" > .env
 ```
 
 ## Usage
@@ -61,52 +67,38 @@ echo "GEMINI_API_KEY=your_api_key_here" > .env
 ### Web Interface
 
 ```bash
-python app.py
+python -m uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-Open http://localhost:8000 in your browser:
+Open http://localhost:8000:
 
-1. Drop an EPUB file (or click to browse)
-2. Select chapters to include (front/back matter auto-deselected)
-3. See estimated listening time update as you select/deselect chapters
-4. Choose a voice and click the play button to preview
-5. Pick format: MP3 (per-chapter) or M4B (single file with chapters)
-6. Set narration speed, output bitrate, and text processing mode
-7. Click "Convert" — the form resets so you can queue another book while it runs
-8. Download files when complete; history persists across page refreshes
+1. Drop an EPUB onto the page
+2. Select chapters (front/back matter auto-deselected)
+3. Choose a voice and preview it
+4. Pick format, bitrate, speed, and text processing
+5. Click **Convert** — queue another book immediately while the first runs
+6. Browse completed books any time in the **Library** tab
 
 ### Command Line
 
 ```bash
-# Convert an EPUB to MP3 (one file per chapter)
+# Basic conversion
 python cli.py convert book.epub
 
-# Use a different voice
-python cli.py convert book.epub --voice marius
+# Specify voice and format
+python cli.py convert book.epub --voice george --format m4b
 
-# Create M4B audiobook with chapter markers
-python cli.py convert book.epub --format m4b
-
-# Combine all chapters into a single MP3
-python cli.py convert book.epub --single-file
-
-# Announce chapter titles at the start of each chapter
-python cli.py convert book.epub --announce
-
-# Resume an interrupted conversion (skip existing files)
+# Resume an interrupted conversion
 python cli.py convert book.epub --resume
 
-# Clean text with Gemini (removes footnotes, artifacts)
+# AI text cleaning (remove footnotes, artifacts)
 python cli.py convert book.epub --clean
 
-# Create condensed version (~30%)
+# Condensed version (~30%)
 python cli.py convert book.epub --speed-read
 
-# Create key points summary (~10%)
+# Key points summary (~10%)
 python cli.py convert book.epub --summary
-
-# Specify output directory
-python cli.py convert book.epub --output ./audiobooks
 
 # List available voices
 python cli.py voices
@@ -117,34 +109,33 @@ python cli.py voices
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--output` | `-o` | Output directory (default: same as input) |
-| `--voice` | `-v` | Voice name or path to WAV file |
+| `--voice` | `-v` | Voice name |
 | `--format` | `-f` | Output format: `mp3` or `m4b` |
 | `--single-file` | `-s` | Combine chapters into one MP3 |
 | `--resume` | `-r` | Skip chapters with existing output files |
 | `--announce` | `-a` | Speak chapter title at start of each chapter |
 | `--clean` | `-c` | Narration-ready text (remove artifacts) |
-| `--speed-read` | | Create ~30% condensed version |
-| `--summary` | | Create ~10% key points summary |
+| `--speed-read` | | Condensed ~30% version |
+| `--summary` | | Key points ~10% summary |
 
 ## Performance
 
-Pocket TTS runs at ~6x realtime on CPU (Apple M4). A 5-hour audiobook takes roughly 50 minutes to generate.
-
-The TTS model (~225MB) is downloaded automatically on first run and cached locally.
+Kokoro TTS runs on Apple Silicon via MLX. On an M-series Mac a 10-hour audiobook typically takes 1–2 hours to generate. Only one book is processed at a time to avoid GPU contention; additional jobs queue automatically.
 
 ## Project Structure
 
 ```
 inkvoice/
-├── cli.py              # Command-line interface (typer)
 ├── app.py              # FastAPI web server
-├── converter.py        # EPUB parsing and conversion orchestration
-├── tts.py              # Pocket TTS speech synthesis + speed resampling
-├── text_processor.py   # Gemini-powered text processing
+├── cli.py              # Command-line interface
+├── converter.py        # EPUB parsing and conversion pipeline
+├── tts.py              # TTS engine wrapper + speed resampling
+├── kokoro_tts.py       # Kokoro MLX/ONNX model interface
+├── text_processor.py   # Gemini text processing
 ├── templates/
-│   └── index.html      # Web UI
-├── test_*.py           # pytest test suite (124 tests)
-└── requirements.txt    # Python dependencies
+│   └── index.html      # Web UI (single-page)
+├── test_*.py           # pytest test suite
+└── requirements.txt
 ```
 
 ## License
