@@ -751,6 +751,10 @@ async def get_library():
         has_cover = (output_dir / "cover.jpg").exists()
         cover_url = f"/api/library/{job_id}/cover" if has_cover else None
 
+        # Estimate duration from file size and bitrate (no ffprobe needed)
+        bitrate_kbps = entry.get("settings", {}).get("bitrate", 128)
+        duration_seconds = int((total_size * 8) / (bitrate_kbps * 1000)) if bitrate_kbps and total_size else None
+
         library.append({
             "job_id": job_id,
             "title": entry.get("title", ""),
@@ -762,6 +766,7 @@ async def get_library():
             "has_cover": has_cover,
             "cover_url": cover_url,
             "settings": entry.get("settings", {}),
+            "duration_seconds": duration_seconds,
         })
 
     library.sort(key=lambda x: x.get("completed_at") or 0, reverse=True)

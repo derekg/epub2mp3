@@ -1070,6 +1070,15 @@
             letter-spacing: 0.04em;
         }
 
+        /* ── Job ETA ──────────────────────────────────────────── */
+
+        .job-eta {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            min-height: 1em;
+            margin-bottom: 2px;
+        }
+
         /* ── Job settings chips ───────────────────────────────── */
 
         .job-settings-row {
@@ -1246,11 +1255,27 @@
         /* ── Library panel ────────────────────────────────────── */
 
         .library-panel {
-            display: none;
             animation: fadeSlideUp 0.3s ease;
         }
 
-        .library-panel.active { display: block; }
+        /* ── Tab panel transitions ─────────────────────────────── */
+
+        .tab-panel {
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .tab-panel.panel-hidden {
+            opacity: 0;
+            transform: translateY(6px);
+            pointer-events: none;
+            position: absolute;
+            visibility: hidden;
+        }
+        .tab-panel.panel-visible {
+            opacity: 1;
+            transform: translateY(0);
+            position: relative;
+            visibility: visible;
+        }
 
         .library-toolbar {
             display: flex;
@@ -1371,10 +1396,17 @@
             font-size: 0.79rem;
             color: var(--text-muted);
             font-style: italic;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+
+        .lib-card-duration {
+            font-size: 1.0rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
         }
 
         .lib-card-meta {
@@ -1533,7 +1565,7 @@
                 </nav>
 
                 <!-- ── Convert panel ───────────────────────────── -->
-                <div id="convertPanel">
+                <div id="convertPanel" class="tab-panel panel-visible">
 
                 <!-- Step 1: Upload -->
                 <div class="card">
@@ -1736,7 +1768,7 @@
                 </div><!-- end #convertPanel -->
 
                 <!-- ── Library panel ───────────────────────────── -->
-                <div class="library-panel" id="libraryPanel">
+                <div class="library-panel tab-panel panel-hidden" id="libraryPanel">
 
                     <div class="library-toolbar">
                         <input class="library-search" id="librarySearch" type="search"
@@ -1854,6 +1886,21 @@
             return `${m}:${String(s).padStart(2, '0')}`;
         }
 
+        function formatEta(seconds) {
+            if (seconds == null || isNaN(seconds)) return '';
+            if (seconds >= 3600) {
+                const h = Math.floor(seconds / 3600);
+                const m = Math.floor((seconds % 3600) / 60);
+                return `~${h}h ${m}m remaining`;
+            }
+            if (seconds >= 60) {
+                const m = Math.floor(seconds / 60);
+                const s = Math.floor(seconds % 60);
+                return `~${m}m ${s}s remaining`;
+            }
+            return `~${Math.floor(seconds)}s remaining`;
+        }
+
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -1899,6 +1946,7 @@
                 <div class="job-card-info">
                     ${author ? `<div class="job-card-author">${escapeHtml(author)}</div>` : ''}
                     <div class="job-card-status" id="st-${jobId}">${status === 'processing' ? 'Starting…' : (status === 'complete' ? 'Complete' : status)}</div>
+                    <div class="job-eta" id="eta-${jobId}"></div>
                 </div>
                 <div class="job-progress-bar">
                     <div class="job-progress-fill" id="fill-${jobId}" style="width:${progress}%"></div>
@@ -2089,12 +2137,27 @@
             fill.style.width = `${data.progress}%`;
             pct.textContent  = `${Math.round(data.progress)}%`;
 
+            // ETA element (always look it up — may not exist in older cards)
+            const etaEl = document.getElementById(`eta-${jobId}`);
+
             if (data.status === 'processing') {
                 dot.className  = 'job-status-dot processing';
                 st.className   = 'job-card-status';
                 st.textContent = data.message;
                 fill.className = 'job-progress-fill';
                 if (resumeBtn) resumeBtn.classList.remove('visible');
+
+                // Show ETA once we have a reliable estimate (elapsed > 30s)
+                if (etaEl) {
+                    const d = data.details || {};
+                    const remaining = d.estimated_remaining_seconds;
+                    const elapsed = d.elapsed_seconds || 0;
+                    if (remaining != null && elapsed > 30) {
+                        etaEl.textContent = formatEta(remaining);
+                    } else {
+                        etaEl.textContent = '';
+                    }
+                }
 
             } else if (data.status === 'complete') {
                 dot.className  = 'job-status-dot complete';
@@ -2103,6 +2166,7 @@
                 pct.textContent= '100%';
                 fill.style.width  = '100%';
                 fill.className = 'job-progress-fill complete';
+                if (etaEl) etaEl.textContent = '';
 
                 if (cancelBtn) { cancelBtn.classList.remove('visible'); }
                 if (resumeBtn) { resumeBtn.classList.remove('visible'); }
@@ -2143,6 +2207,7 @@
                 st.textContent = 'Failed';
                 fill.className = 'job-progress-fill error';
                 pct.textContent= '';
+                if (etaEl) etaEl.textContent = '';
                 if (errEl) { errEl.textContent = data.message; errEl.classList.add('visible'); }
                 if (cancelBtn) { cancelBtn.classList.remove('visible'); }
                 if (resumeBtn && data.can_resume) { resumeBtn.classList.add('visible'); }
@@ -2153,6 +2218,7 @@
                 st.textContent = 'Cancelled';
                 fill.className = 'job-progress-fill';
                 pct.textContent= '';
+                if (etaEl) etaEl.textContent = '';
                 if (cancelBtn) { cancelBtn.classList.remove('visible'); }
                 if (resumeBtn && data.can_resume) { resumeBtn.classList.add('visible'); }
             }
@@ -2745,17 +2811,29 @@
             const tabLibrary   = document.getElementById('tabLibrary');
 
             if (tab === 'convert') {
-                convertPanel.style.display = 'block';
-                libraryPanel.classList.remove('active');
+                convertPanel.classList.remove('panel-hidden');
+                convertPanel.classList.add('panel-visible');
+                libraryPanel.classList.remove('panel-visible');
+                libraryPanel.classList.add('panel-hidden');
                 tabConvert.classList.add('active');
                 tabLibrary.classList.remove('active');
             } else {
-                convertPanel.style.display = 'none';
-                libraryPanel.classList.add('active');
-                tabConvert.classList.remove('active');
+                libraryPanel.classList.remove('panel-hidden');
+                libraryPanel.classList.add('panel-visible');
+                convertPanel.classList.remove('panel-visible');
+                convertPanel.classList.add('panel-hidden');
                 tabLibrary.classList.add('active');
+                tabConvert.classList.remove('active');
                 loadLibrary();
             }
+        }
+
+        function formatAudioDuration(seconds) {
+            if (!seconds) return '';
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            if (h > 0) return `${h}h ${m}m`;
+            return `${m}m`;
         }
 
         function formatBytes(bytes) {
@@ -2858,17 +2936,19 @@
                 </div>`;
             }
 
-            const fmt    = inferFormat(item.files);
-            const size   = formatBytes(item.total_size_bytes);
-            const date   = formatRelativeDate(item.completed_at);
-            const title  = escapeHtml(item.title || 'Untitled');
-            const author = escapeHtml(item.author || '');
+            const fmt      = inferFormat(item.files);
+            const size     = formatBytes(item.total_size_bytes);
+            const date     = formatRelativeDate(item.completed_at);
+            const title    = escapeHtml(item.title || 'Untitled');
+            const author   = escapeHtml(item.author || '');
+            const duration = formatAudioDuration(item.duration_seconds);
 
             card.innerHTML = `
                 ${coverHtml}
                 <div class="lib-card-body">
                     <div class="lib-card-title" title="${title}">${title}</div>
                     ${author ? `<div class="lib-card-author">${author}</div>` : ''}
+                    ${duration ? `<div class="lib-card-duration">${duration}</div>` : ''}
                     <div class="lib-card-meta">
                         ${fmt ? `<span class="lib-format-badge">${fmt}</span>` : ''}
                         ${size ? `<span class="lib-card-size">${size}</span>` : ''}
