@@ -1712,16 +1712,6 @@
                         </label>
                     </div>
 
-                    <!-- Notifications -->
-                    <div class="option-group" style="margin-top:18px">
-                        <div class="option-group-title">Notifications <span style="font-weight:400;color:var(--text-muted);font-size:0.78rem;">— optional</span></div>
-                        <div class="option-row">
-                            <input type="url" id="ntfyUrl" placeholder="https://ntfy.sh/your-topic"
-                                style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:0.84rem;font-family:inherit;box-sizing:border-box;">
-                        </div>
-                        <div class="processing-note">Push a notification to your phone when each book finishes. Get a free topic at <a href="https://ntfy.sh" target="_blank" style="color:var(--accent)">ntfy.sh</a>.</div>
-                    </div>
-
                     <button class="convert-btn" id="convertBtn" disabled>Select an EPUB to begin</button>
 
                     <div class="error" id="errorText"></div>
@@ -2330,27 +2320,6 @@
 
         loadCapabilities();
         loadVoices();
-        loadNtfySettings();
-
-        // ── ntfy notification settings ────────────────────────────
-        const ntfyInput = document.getElementById('ntfyUrl');
-
-        async function loadNtfySettings() {
-            try {
-                const data = await fetch('/api/settings').then(r => r.json());
-                if (data.ntfy_url) ntfyInput.value = data.ntfy_url;
-            } catch (e) { /* non-fatal */ }
-        }
-
-        ntfyInput.addEventListener('change', async () => {
-            try {
-                await fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ntfy_url: ntfyInput.value.trim() }),
-                });
-            } catch (e) { /* non-fatal */ }
-        });
 
         // ── Bitrate note ─────────────────────────────────────────
 

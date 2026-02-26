@@ -5,7 +5,6 @@ import json
 import shutil
 import tempfile
 import time
-import urllib.request
 import uuid
 import zipfile
 from pathlib import Path
@@ -37,47 +36,6 @@ jobs: dict = {}
 OUTPUT_DIR = Path.home() / "epub2mp3_output"
 JOBS_MANIFEST = OUTPUT_DIR / "jobs.json"
 CHECKPOINTS_DIR = OUTPUT_DIR / "checkpoints"
-SETTINGS_FILE = OUTPUT_DIR / "settings.json"
-
-# ---------------------------------------------------------------------------
-# Settings (ntfy URL etc.) — loaded at startup, mutable at runtime
-# ---------------------------------------------------------------------------
-_settings: dict = {}
-
-def _load_settings() -> None:
-    global _settings
-    if SETTINGS_FILE.exists():
-        try:
-            _settings = json.loads(SETTINGS_FILE.read_text())
-        except Exception:
-            _settings = {}
-
-def _save_settings() -> None:
-    SETTINGS_FILE.write_text(json.dumps(_settings, indent=2))
-
-def _get_ntfy_url() -> str | None:
-    return _settings.get("ntfy_url") or None
-
-# ---------------------------------------------------------------------------
-# ntfy.sh push notifications
-# ---------------------------------------------------------------------------
-async def _send_ntfy(title: str, body: str, tags: str = "white_check_mark") -> None:
-    """Fire-and-forget push notification via ntfy.sh. Never raises."""
-    url = _get_ntfy_url()
-    if not url:
-        return
-    def _post():
-        try:
-            req = urllib.request.Request(
-                url,
-                data=body.encode(),
-                headers={"Title": title, "Tags": tags, "Priority": "default"},
-                method="POST",
-            )
-            urllib.request.urlopen(req, timeout=5)
-        except Exception:
-            pass  # Notifications are best-effort — never crash the server
-    await asyncio.to_thread(_post)
 
 # Load TTS model at startup
 if is_tts_available():
@@ -253,9 +211,6 @@ async def startup_event():
     # Ensure persistent directories exist
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Load user settings (ntfy URL etc.)
-    _load_settings()
 
     # Restore persisted completed jobs
     _load_persisted_jobs()
@@ -709,18 +664,6 @@ async def run_conversion(
 
         _save_jobs_manifest()
 
-        # Push notification — best effort, non-blocking
-        title = job.get("title") or "Audiobook"
-        author = job.get("author", "")
-        fmt = job.get("settings", {}).get("output_format", "").upper()
-        total_bytes = sum(job["summary"]["file_sizes"].values())
-        bitrate = job.get("settings", {}).get("bitrate", 128)
-        duration_s = int((total_bytes * 8) / (bitrate * 1000)) if total_bytes else 0
-        h, m = divmod(duration_s // 60, 60)
-        dur_str = f"{h}h {m}m" if h else f"{m}m"
-        body = " · ".join(filter(None, [f"by {author}" if author else None, dur_str, fmt]))
-        asyncio.create_task(_send_ntfy(f"✅ {title}", body))
-
     except asyncio.CancelledError:
         job["status"] = "cancelled"
         job["completed_at"] = time.time()
@@ -746,9 +689,6 @@ async def run_conversion(
         job["can_resume"] = True
         # Preserve checkpoint_dir for resume — do not clean it up
         _save_jobs_manifest()
-
-        title = job.get("title") or "Audiobook"
-        asyncio.create_task(_send_ntfy(f"❌ {title}", job["message"], tags="x"))
 
 
 # ---------------------------------------------------------------------------
@@ -1132,24 +1072,6 @@ async def cleanup_job(job_id: str):
 
     del jobs[job_id]
     return {"status": "cleaned"}
-
-
-@app.get("/api/settings")
-async def get_settings():
-    """Return current user settings."""
-    ntfy_url = _get_ntfy_url()
-    return {
-        "ntfy_url": ntfy_url or "",
-    }
-
-
-@app.post("/api/settings")
-async def update_settings(payload: dict):
-    """Update user settings and persist to disk."""
-    if "ntfy_url" in payload:
-        _settings["ntfy_url"] = payload["ntfy_url"].strip()
-    _save_settings()
-    return {"ok": True}
 
 
 if __name__ == "__main__":
