@@ -686,6 +686,12 @@ def convert_epub_to_mp3(
             "words_total": total_words,
         })
 
+    # Persist title/author in the checkpoint so crash recovery can restore them
+    if checkpoint_dir is not None and "title" not in checkpoint_data:
+        checkpoint_data["title"] = book.title
+        checkpoint_data["author"] = book.author
+        _save_checkpoint(checkpoint_dir, checkpoint_data)
+
     # Validate voice
     if voice not in VOICES:
         if progress_callback:

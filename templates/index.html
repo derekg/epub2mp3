@@ -2820,23 +2820,38 @@
             if (confirm('Clear all conversion history?')) clearHistory();
         });
 
-        // ── Reconnect in-progress jobs on page load ───────────────
+        // ── Reconnect in-progress and crash-recovered jobs on page load ──
         async function reconnectInProgressJobs() {
             try {
                 const res = await fetch('/api/jobs');
                 if (!res.ok) return;
                 const d = await res.json();
                 for (const sj of (d.jobs || [])) {
-                    if (sj.status !== 'processing') continue;
-                    if (jobQueue.has(sj.job_id)) continue; // Already tracked
+                    const isActive     = sj.status === 'processing';
+                    const isResumable  = sj.status === 'error' && sj.can_resume;
+                    if (!isActive && !isResumable) continue;
+                    if (jobQueue.has(sj.job_id)) continue;
+
                     const title = sj.title || sj.job_id.slice(0, 8);
                     addJob(sj.job_id, title, {
-                        author: sj.author || '',
+                        author:   sj.author   || '',
                         settings: sj.settings || {},
-                        status: 'processing',
+                        status:   sj.status,
                         progress: sj.progress || 0,
                     });
-                    listenForProgress(sj.job_id);
+
+                    if (isActive) {
+                        listenForProgress(sj.job_id);
+                    } else {
+                        // Crash survivor — show error card with Resume button
+                        updateJobCard(sj.job_id, {
+                            status:     'error',
+                            progress:   sj.progress || 0,
+                            message:    sj.message || 'Interrupted — click Resume to continue.',
+                            files:      [],
+                            can_resume: true,
+                        });
+                    }
                 }
             } catch (_) {}
         }

@@ -209,6 +209,83 @@ def _load_persisted_jobs():
         print(f"[persist] Failed to load jobs manifest: {e}")
 
 
+def _recover_crashed_jobs():
+    """Scan CHECKPOINTS_DIR for jobs interrupted by a server crash.
+
+    When the server dies via SIGABRT (Metal GPU assertion), Python's exception
+    handlers never run, so in-progress jobs are never written to jobs.json.
+    On the next startup we scan checkpoint directories that aren't already in
+    the jobs dict and restore them as error+can_resume jobs so the user can
+    resume from where the crash left off.
+    """
+    if not CHECKPOINTS_DIR.exists():
+        return
+    known_ids = set(jobs.keys())
+    recovered = 0
+
+    for ckpt_dir in CHECKPOINTS_DIR.iterdir():
+        if not ckpt_dir.is_dir():
+            continue
+        job_id = ckpt_dir.name
+        if job_id in known_ids:
+            continue
+
+        epub_path = ckpt_dir / "input.epub"
+        ckpt_file = ckpt_dir / "checkpoint.json"
+        if not epub_path.exists() or not ckpt_file.exists():
+            continue
+
+        try:
+            cp_data = json.loads(ckpt_file.read_text())
+        except Exception:
+            continue
+
+        chapters = cp_data.get("chapters", {})
+        if not chapters:
+            continue
+
+        chapters_done = sum(1 for v in chapters.values() if v.get("status") == "done")
+        total = len(chapters)
+        settings = cp_data.get("settings", {})
+        title = cp_data.get("title", "")
+        author = cp_data.get("author", "")
+
+        jobs[job_id] = {
+            "status": "error",
+            "progress": int(chapters_done / total * 100) if total > 0 else 0,
+            "message": (
+                f"Interrupted — {chapters_done}/{total} chapters done. "
+                "Click Resume to continue."
+            ),
+            "output_dir": OUTPUT_DIR / job_id,
+            "job_dir": None,
+            "files": [],
+            "completed_at": time.time(),
+            "checkpoint_dir": ckpt_dir,
+            "can_resume": True,
+            "title": title,
+            "author": author,
+            "settings": settings,
+            "details": {
+                "chapter_current": chapters_done,
+                "chapter_total": total,
+                "chapter_title": "",
+                "stage": "interrupted",
+                "start_time": 0,
+                "words_processed": 0,
+                "words_total": 0,
+            },
+        }
+        recovered += 1
+        print(
+            f"[persist] Recovered crashed job {job_id}: "
+            f"{title!r} ({chapters_done}/{total} chapters done)"
+        )
+
+    if recovered:
+        _save_jobs_manifest()
+
+
 app = FastAPI(title="Inkvoice")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
@@ -220,8 +297,10 @@ async def startup_event():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Restore persisted completed jobs
+    # Restore persisted completed/error/cancelled jobs from manifest
     _load_persisted_jobs()
+    # Recover any jobs that were mid-conversion when the server crashed
+    _recover_crashed_jobs()
 
     # One-time cleanup of crash leftovers
     dirs_removed = _cleanup_orphaned_tmp_dirs(max_age_seconds=ORPHAN_TTL_SECONDS)
@@ -339,6 +418,7 @@ async def list_jobs():
             "message": job.get("message", ""),
             "settings": job.get("settings", {}),
             "summary": job.get("summary"),
+            "can_resume": job.get("can_resume", False),
         })
     # Sort: processing jobs first, then by completed_at descending
     def sort_key(j):
