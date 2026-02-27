@@ -250,6 +250,25 @@ def _recover_crashed_jobs():
         title = cp_data.get("title", "")
         author = cp_data.get("author", "")
 
+        # If title wasn't saved in checkpoint (crashed before parse completed),
+        # extract it directly from the preserved EPUB file.
+        if not title:
+            try:
+                import zipfile as _zf, re as _re
+                with _zf.ZipFile(str(epub_path)) as z:
+                    for name in z.namelist():
+                        if name.endswith(".opf"):
+                            content = z.read(name).decode("utf-8", errors="ignore")
+                            m = _re.search(r"<dc:title[^>]*>([^<]+)", content)
+                            if m:
+                                title = m.group(1).strip()
+                            m = _re.search(r"<dc:creator[^>]*>([^<]+)", content)
+                            if m:
+                                author = m.group(1).strip()
+                            break
+            except Exception:
+                pass
+
         jobs[job_id] = {
             "status": "error",
             "progress": int(chapters_done / total * 100) if total > 0 else 0,
