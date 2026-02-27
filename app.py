@@ -995,7 +995,17 @@ async def get_library():
         })
 
     library.sort(key=lambda x: x.get("completed_at") or 0, reverse=True)
-    return {"library": library}
+
+    # Deduplicate: keep only the most recent entry per (title, author)
+    seen: dict[tuple, bool] = {}
+    deduped = []
+    for item in library:
+        key = (item.get("title", "").strip().lower(), item.get("author", "").strip().lower())
+        if key not in seen:
+            seen[key] = True
+            deduped.append(item)
+
+    return {"library": deduped}
 
 
 @app.get("/api/library/{job_id}/cover")
@@ -1054,6 +1064,35 @@ async def cancel_job(job_id: str):
     job["message"] = "Cancelled"
 
     return {"status": "cancelled"}
+
+
+@app.delete("/api/jobs/{job_id}")
+async def dismiss_job(job_id: str):
+    """Delete a failed or cancelled job: remove checkpoint, output files, and manifest entry."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = jobs[job_id]
+    if job["status"] not in ("error", "cancelled"):
+        raise HTTPException(status_code=400, detail=f"Only failed or cancelled jobs can be dismissed (status: {job['status']})")
+
+    # Remove checkpoint directory (contains input.epub + per-chapter audio chunks)
+    checkpoint_dir = job.get("checkpoint_dir")
+    if checkpoint_dir:
+        shutil.rmtree(str(checkpoint_dir), ignore_errors=True)
+
+    # Remove output directory if it exists and has no completed audio (partial output)
+    output_dir = job.get("output_dir")
+    if output_dir:
+        output_dir = Path(output_dir)
+        if output_dir.exists():
+            audio_files = [f for f in output_dir.iterdir() if f.suffix in (".mp3", ".m4b")]
+            if not audio_files:
+                shutil.rmtree(str(output_dir), ignore_errors=True)
+
+    del jobs[job_id]
+    _save_jobs_manifest()
+    return {"status": "dismissed"}
 
 
 @app.post("/api/resume/{job_id}")
