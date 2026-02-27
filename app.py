@@ -361,17 +361,24 @@ def _recover_orphaned_output_dirs():
         if not audio_files:
             continue
 
-        # Try to read title/author from audio file tags
+        # Try to read title/author/cover from audio file tags
         title = ""
         author = ""
         try:
             from mutagen.mp4 import MP4
             from mutagen.id3 import ID3
+            from mutagen.mp4 import MP4Cover
             for af in audio_files:
                 if af.suffix == ".m4b":
                     tags = MP4(str(af))
                     title = str(tags.get("\xa9nam", [""])[0])
                     author = str(tags.get("\xa9ART", [""])[0])
+                    # Extract embedded cover if cover.jpg not already on disk
+                    cover_path = entry / "cover.jpg"
+                    if not cover_path.exists():
+                        covers = tags.get("covr", [])
+                        if covers:
+                            cover_path.write_bytes(bytes(covers[0]))
                     break
                 elif af.suffix == ".mp3":
                     tags = ID3(str(af))
