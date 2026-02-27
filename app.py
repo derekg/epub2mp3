@@ -227,7 +227,28 @@ def _recover_crashed_jobs():
         if not ckpt_dir.is_dir():
             continue
         job_id = ckpt_dir.name
+
+        # If already loaded but missing title, try to fill it in from the EPUB
         if job_id in known_ids:
+            existing = jobs[job_id]
+            if not existing.get("title"):
+                epub_path = ckpt_dir / "input.epub"
+                if epub_path.exists():
+                    try:
+                        import zipfile as _zf, re as _re
+                        with _zf.ZipFile(str(epub_path)) as z:
+                            for name in z.namelist():
+                                if name.endswith(".opf"):
+                                    content = z.read(name).decode("utf-8", errors="ignore")
+                                    m = _re.search(r"<dc:title[^>]*>([^<]+)", content)
+                                    if m:
+                                        existing["title"] = m.group(1).strip()
+                                    m = _re.search(r"<dc:creator[^>]*>([^<]+)", content)
+                                    if m:
+                                        existing["author"] = m.group(1).strip()
+                                    break
+                    except Exception:
+                        pass
             continue
 
         epub_path = ckpt_dir / "input.epub"
