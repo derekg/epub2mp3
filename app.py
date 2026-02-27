@@ -15,7 +15,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Response
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import lameenc
@@ -1199,6 +1199,17 @@ async def stream_all_progress():
             "Connection": "keep-alive",
         }
     )
+
+
+@app.head("/api/download/{job_id}/{filename}")
+async def check_download_file(job_id: str, filename: str):
+    """HEAD request: check if a file is available without downloading it."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    file_path = jobs[job_id]["output_dir"] / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return Response(status_code=200)
 
 
 @app.get("/api/download/{job_id}/{filename}")
