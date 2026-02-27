@@ -101,6 +101,9 @@ def _cleanup_stale_jobs(max_age_seconds: int = JOB_TTL_SECONDS) -> int:
     """Remove jobs whose status is complete/error/cancelled and whose
     completion time is older than *max_age_seconds*.
 
+    Completed jobs with output files still on disk are kept in the manifest
+    so they remain visible in the Library.
+
     Returns the number of jobs removed.
     """
     now = time.time()
@@ -111,8 +114,16 @@ def _cleanup_stale_jobs(max_age_seconds: int = JOB_TTL_SECONDS) -> int:
         completed_at = job.get("completed_at")
         if completed_at is None:
             continue
-        if now - completed_at > max_age_seconds:
-            to_delete.append(job_id)
+        if now - completed_at <= max_age_seconds:
+            continue
+        # Keep completed jobs that still have output files on disk
+        if job.get("status") == "complete":
+            output_dir = Path(job.get("output_dir", OUTPUT_DIR / job_id))
+            if output_dir.exists() and any(
+                f.suffix in (".mp3", ".m4b") for f in output_dir.iterdir()
+            ):
+                continue
+        to_delete.append(job_id)
 
     for job_id in to_delete:
         job = jobs.pop(job_id)
@@ -326,6 +337,86 @@ def _recover_crashed_jobs():
         _save_jobs_manifest()
 
 
+def _recover_orphaned_output_dirs():
+    """Scan OUTPUT_DIR for completed audiobooks not tracked in jobs manifest.
+
+    This catches books whose manifest entries were removed by the TTL cleanup
+    while the actual audio files remained on disk.
+    """
+    if not OUTPUT_DIR.exists():
+        return
+    known_ids = set(jobs.keys())
+    recovered = 0
+    audio_exts = {".mp3", ".m4b"}
+
+    for entry in OUTPUT_DIR.iterdir():
+        if not entry.is_dir():
+            continue
+        job_id = entry.name
+        # Skip UUIDs already in manifest, the checkpoints dir, and non-UUID dirs
+        if job_id in known_ids or job_id == "checkpoints":
+            continue
+
+        audio_files = [f for f in entry.iterdir() if f.suffix in audio_exts]
+        if not audio_files:
+            continue
+
+        # Try to read title/author from audio file tags
+        title = ""
+        author = ""
+        try:
+            from mutagen.mp4 import MP4
+            from mutagen.id3 import ID3
+            for af in audio_files:
+                if af.suffix == ".m4b":
+                    tags = MP4(str(af))
+                    title = str(tags.get("\xa9nam", [""])[0])
+                    author = str(tags.get("\xa9ART", [""])[0])
+                    break
+                elif af.suffix == ".mp3":
+                    tags = ID3(str(af))
+                    title = str(tags.get("TIT2", ""))
+                    author = str(tags.get("TPE1", ""))
+                    break
+        except Exception:
+            pass
+
+        # Fall back to filename if tags are empty
+        if not title and audio_files:
+            title = audio_files[0].stem.replace("_", " ")
+
+        filenames = [f.name for f in audio_files]
+        file_sizes = {f.name: f.stat().st_size for f in audio_files}
+        total_size = sum(file_sizes.values())
+        has_cover = (entry / "cover.jpg").exists()
+        mtime = max(f.stat().st_mtime for f in audio_files)
+
+        jobs[job_id] = {
+            "status": "complete",
+            "progress": 100,
+            "message": "Conversion complete!",
+            "output_dir": entry,
+            "job_dir": None,
+            "files": filenames,
+            "completed_at": mtime,
+            "checkpoint_dir": None,
+            "can_resume": False,
+            "title": title,
+            "author": author,
+            "settings": {},
+            "has_cover": has_cover,
+            "summary": {
+                "chapter_count": len(filenames),
+                "file_sizes": {k: v for k, v in file_sizes.items()},
+            },
+        }
+        recovered += 1
+        print(f"[persist] Recovered orphaned output dir {job_id}: {title!r}")
+
+    if recovered:
+        _save_jobs_manifest()
+
+
 app = FastAPI(title="Inkvoice")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
@@ -341,6 +432,8 @@ async def startup_event():
     _load_persisted_jobs()
     # Recover any jobs that were mid-conversion when the server crashed
     _recover_crashed_jobs()
+    # Recover completed audiobooks whose manifest entries were TTL-evicted
+    _recover_orphaned_output_dirs()
 
     # One-time cleanup of crash leftovers
     dirs_removed = _cleanup_orphaned_tmp_dirs(max_age_seconds=ORPHAN_TTL_SECONDS)
