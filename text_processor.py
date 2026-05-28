@@ -299,10 +299,10 @@ def summarize_text_with_gemini(
 
 def clean_text_basic(text: str) -> str:
     """Basic regex-based text cleaning (fallback when Gemini not available)."""
-    # Remove footnote markers
-    text = re.sub(r'\[\d+\]', '', text)
-    text = re.sub(r'\[[\w,\s]+\]', '', text)
-    text = re.sub(r'[*†‡§¶]+', '', text)
+    # Remove footnote markers only — NOT editorial bracket insertions like [sic] or [that had]
+    text = re.sub(r'\[\d+\]', '', text)          # numeric: [1], [42]
+    text = re.sub(r'\[\*+\]', '', text)           # asterisk: [*], [**]
+    text = re.sub(r'(?<!\w)[*†‡§¶]+(?!\w)', '', text)  # standalone symbols only
 
     # Remove standalone page numbers
     text = re.sub(r'\n\s*\d{1,4}\s*\n', '\n', text)
