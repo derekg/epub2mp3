@@ -30,7 +30,10 @@ RETRY_DELAY = 5  # seconds
 # Gemini 3 Flash output limit: 65,536 tokens (~50,000 words)
 # Most chapters fit in a single call - only very long ones need chunking
 MAX_OUTPUT_TOKENS = 65536
-CHUNK_SIZE_CHARS = 150000  # ~37,500 words, safe margin under output limit
+CHUNK_SIZE_CHARS = 40000  # ~10,000 words; conservative to stay under model output limits
+
+# If cleaned output is below this fraction of the original word count, treat as truncated
+MIN_RETENTION_RATIO = 0.85
 
 # Processing modes
 class ProcessingMode:
@@ -127,8 +130,17 @@ def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE_CHARS) -> list[str]:
     return chunks
 
 
+def _is_truncated(original: str, cleaned: str) -> bool:
+    """Return True if cleaned output looks truncated relative to original."""
+    orig_words = len(original.split())
+    clean_words = len(cleaned.split())
+    if orig_words == 0:
+        return False
+    return (clean_words / orig_words) < MIN_RETENTION_RATIO
+
+
 def _clean_chunk(client, text: str, progress_callback: Callable[[str], None] = None) -> str:
-    """Clean a single chunk of text."""
+    """Clean a single chunk of text, retrying with smaller sub-chunks on truncation."""
     for attempt in range(MAX_RETRIES):
         try:
             response = client.models.generate_content(
@@ -139,7 +151,36 @@ def _clean_chunk(client, text: str, progress_callback: Callable[[str], None] = N
                     "maxOutputTokens": MAX_OUTPUT_TOKENS,
                 }
             )
-            return response.text.strip()
+            result = response.text.strip()
+
+            # Check for truncation via finish_reason
+            truncated = False
+            try:
+                finish_reason = response.candidates[0].finish_reason
+                if finish_reason and str(finish_reason) in ("MAX_TOKENS", "2"):
+                    truncated = True
+            except (AttributeError, IndexError):
+                pass
+
+            if not truncated:
+                truncated = _is_truncated(text, result)
+
+            if truncated:
+                # Split into two halves and clean each independently
+                paragraphs = text.split('\n\n')
+                mid = len(paragraphs) // 2
+                if mid == 0:
+                    # Single paragraph too long — fall back to basic cleaning
+                    if progress_callback:
+                        progress_callback("Chunk too long for Gemini output limit, using basic cleaning")
+                    return clean_text_basic(text)
+                if progress_callback:
+                    progress_callback("Output truncated, splitting chunk and retrying...")
+                half_a = '\n\n'.join(paragraphs[:mid])
+                half_b = '\n\n'.join(paragraphs[mid:])
+                return _clean_chunk(client, half_a, progress_callback) + '\n\n' + _clean_chunk(client, half_b, progress_callback)
+
+            return result
         except ClientError as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                 if attempt < MAX_RETRIES - 1:
