@@ -5,3 +5,5 @@ __pycache__/
 *.mp3
 *.wav
 *.zip
+*.m4b
+.claude/
