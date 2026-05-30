@@ -1,14 +1,14 @@
 # Inkvoice
 
-Turn any EPUB into a beautifully narrated audiobook using local AI text-to-speech.
+Turn any EPUB into a beautifully narrated audiobook using on-device AI text-to-speech.
 
-Uses [Kokoro TTS](https://huggingface.co/hexgrad/Kokoro-82M) for on-device speech synthesis and [Gemini](https://ai.google.dev/) for optional text processing.
+Uses [Kokoro TTS](https://github.com/thewh1teagle/kokoro-onnx) (82M parameter model) for fast, high-quality local synthesis and [Gemini](https://ai.google.dev/) for optional text cleaning and summarization.
 
 ## Features
 
 - **Web interface** — Clean, responsive UI with drag-and-drop; works on mobile and tablet
 - **CLI** — Batch convert from the command line
-- **8 voices** — American and British, male and female (see below)
+- **8 voices** — American and British, male and female
 - **Voice preview** — Audition each voice before committing to a long conversion
 - **Chapter selection** — Choose exactly which chapters to include
 - **Estimated listening time** — Updates live as you select or deselect chapters
@@ -16,15 +16,15 @@ Uses [Kokoro TTS](https://huggingface.co/hexgrad/Kokoro-82M) for on-device speec
 - **Bitrate selection** — 64 / 128 / 192 kbps
 - **M4B audiobook format** — Single file with embedded chapter markers (requires ffmpeg)
 - **MP3 with metadata** — ID3 tags with title, author, chapter number, and cover art
-- **Multi-job queue** — Convert multiple books simultaneously; track all jobs in a sidebar
-- **Resume interrupted jobs** — Checkpoint system saves per-chapter progress; pick up where you left off after a failure or restart
+- **Multi-job queue** — Start another book while the first is still converting
+- **Resume interrupted jobs** — Per-chapter checkpoint system; pick up where you left off after a crash or restart
 - **Persistent library** — Browse all completed audiobooks with cover art, duration, and one-click download
 - **Cancel conversion** — Stop any in-progress job at any time
-- **Chapter announcements** — Optionally speak chapter titles
-- **Auto cleanup** — Temp files cleaned up automatically
+- **Chapter announcements** — Optionally speak chapter titles before each chapter
+- **Auto cleanup** — Temp files removed automatically after 1 hour
 - **Browser notifications** — Get notified when a book finishes, even with the tab in the background
-- **AI text processing** — Powered by Gemini:
-  - **Narration-ready** — Remove footnotes, URLs, figure captions
+- **AI text processing** — Optional Gemini-powered modes:
+  - **Narration-ready** — Remove footnotes, URLs, figure captions, page numbers
   - **Condensed** — ~30% shorter while preserving key information
   - **Key points** — ~10% summary of main ideas
 
@@ -44,8 +44,9 @@ Uses [Kokoro TTS](https://huggingface.co/hexgrad/Kokoro-82M) for on-device speec
 ## Requirements
 
 - Python 3.11+
-- ffmpeg (optional, for M4B format)
-- Gemini API key (optional, for text processing)
+- Apple Silicon Mac recommended (uses MLX for fast on-device inference; ONNX fallback works on any platform but is slower)
+- ffmpeg — optional, for M4B format (`brew install ffmpeg`)
+- Gemini API key — optional, for text cleaning and summarization
 
 ## Installation
 
@@ -54,9 +55,11 @@ git clone https://github.com/derekg/epub2mp3.git
 cd epub2mp3
 pip install -r requirements.txt
 
+# Download Kokoro model weights (first run only, ~180 MB)
+python setup_kokoro.py
+
 # Optional: M4B support
-brew install ffmpeg       # macOS
-apt install ffmpeg        # Linux
+brew install ffmpeg
 
 # Optional: Gemini text processing
 echo "GEMINI_API_KEY=your_key_here" > .env
@@ -75,9 +78,9 @@ Open http://localhost:8000:
 1. Drop an EPUB onto the page
 2. Select chapters (front/back matter auto-deselected)
 3. Choose a voice and preview it
-4. Pick format, bitrate, speed, and text processing
-5. Click **Convert** — queue another book immediately while the first runs
-6. Browse completed books any time in the **Library** tab
+4. Pick format, bitrate, speed, and text processing mode
+5. Click **Convert** — start another book immediately while the first runs
+6. Browse completed books in the **Library** tab
 
 ### Command Line
 
@@ -85,7 +88,7 @@ Open http://localhost:8000:
 # Basic conversion
 python cli.py convert book.epub
 
-# Specify voice and format
+# Choose voice and format
 python cli.py convert book.epub --voice george --format m4b
 
 # Resume an interrupted conversion
@@ -94,7 +97,7 @@ python cli.py convert book.epub --resume
 # AI text cleaning (remove footnotes, artifacts)
 python cli.py convert book.epub --clean
 
-# Condensed version (~30%)
+# Condensed version (~30% of original length)
 python cli.py convert book.epub --speed-read
 
 # Key points summary (~10%)
@@ -120,20 +123,25 @@ python cli.py voices
 
 ## Performance
 
-Kokoro TTS runs on Apple Silicon via MLX. On an M-series Mac a 10-hour audiobook typically takes 1–2 hours to generate. Only one book is processed at a time to avoid GPU contention; additional jobs queue automatically.
+On Apple Silicon (M-series) via MLX, Kokoro runs at ~13–18× real-time — a 10-hour audiobook typically takes 45 minutes to 1.5 hours to generate. On non-Apple hardware via ONNX the same job takes several hours.
+
+Only one book is processed at a time to avoid GPU/NPU contention; additional jobs queue automatically and start as soon as the active one finishes.
 
 ## Project Structure
 
 ```
 inkvoice/
-├── app.py              # FastAPI web server
-├── cli.py              # Command-line interface
-├── converter.py        # EPUB parsing and conversion pipeline
-├── tts.py              # TTS engine wrapper + speed resampling
-├── kokoro_tts.py       # Kokoro MLX/ONNX model interface
-├── text_processor.py   # Gemini text processing
+├── app.py              # FastAPI web server and job management
+├── cli.py              # Command-line interface (Typer)
+├── converter.py        # EPUB parsing and audio encoding pipeline
+├── tts.py              # TTS engine wrapper, speed resampling, text chunking
+├── kokoro_tts.py       # Kokoro MLX/ONNX model interface and voice catalogue
+├── text_processor.py   # Gemini text cleaning and summarization
+├── setup_kokoro.py     # First-run model download script
 ├── templates/
-│   └── index.html      # Web UI (single-page)
+│   └── index.html      # Web UI (single-page app)
+├── static/
+│   └── favicon.svg
 ├── test_*.py           # pytest test suite
 └── requirements.txt
 ```
