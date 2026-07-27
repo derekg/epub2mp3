@@ -6,15 +6,25 @@ Kokoro-82M is a lightweight, high-quality TTS model with 49 voices.
 
 Install:
   Apple Silicon:  pip install mlx-audio
-  Cross-platform: pip install kokoro-onnx huggingface_hub
+  Cross-platform: pip install kokoro-onnx
 """
 
+import urllib.request
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
 
 SAMPLE_RATE = 24000
+
+# Source for ONNX model files.  The Hugging Face repo these used to come from
+# (hexgrad/Kokoro-82M-ONNX) is no longer publicly available; the kokoro-onnx
+# project's own GitHub release is the canonical source.
+KOKORO_ONNX_RELEASE_URL = (
+    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
+)
+KOKORO_ONNX_MODEL_FILE = "kokoro-v1.0.onnx"
+KOKORO_ONNX_VOICES_FILE = "voices-v1.0.bin"
 
 KOKORO_VOICES = {
     "heart":   {"char": "Warm American",      "gender": "F", "lang": "en-us", "id": "af_heart",   "best_for": "narration"},
@@ -31,6 +41,12 @@ DEFAULT_KOKORO_VOICE = "george"
 
 # Global model instance (set by load_kokoro_model)
 _kokoro_model = None
+
+# Cached KokoroPipeline per language prefix (MLX only).  Calling the pipeline
+# directly keeps voice packs cached across chunks; model.generate() resets
+# them and flushes the Metal buffer cache on every call, which costs real
+# time when invoked once per ~50-word chunk.
+_mlx_pipelines: dict = {}
 
 
 def _get_kokoro_id(voice: str) -> tuple[str, str, str]:
@@ -61,6 +77,36 @@ def _to_int16(audio) -> np.ndarray:
     return audio
 
 
+def _download_file(url: str, dest: Path) -> Path:
+    """Download url to dest atomically, skipping if already present."""
+    if dest.exists() and dest.stat().st_size > 0:
+        return dest
+    tmp = dest.with_name(dest.name + ".part")
+    print(f"Downloading {url} ...")
+    urllib.request.urlretrieve(url, tmp)
+    tmp.replace(dest)
+    return dest
+
+
+def ensure_onnx_files() -> tuple[Path, Path]:
+    """Ensure the ONNX model and voices files exist in ~/.cache/kokoro/.
+
+    Returns (model_path, voices_path).  Filenames match what earlier versions
+    cached via huggingface_hub, so existing installs are reused as-is.
+    """
+    cache_dir = Path.home() / ".cache" / "kokoro"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    model_path = _download_file(
+        f"{KOKORO_ONNX_RELEASE_URL}/{KOKORO_ONNX_MODEL_FILE}",
+        cache_dir / KOKORO_ONNX_MODEL_FILE,
+    )
+    voices_path = _download_file(
+        f"{KOKORO_ONNX_RELEASE_URL}/{KOKORO_ONNX_VOICES_FILE}",
+        cache_dir / KOKORO_ONNX_VOICES_FILE,
+    )
+    return model_path, voices_path
+
+
 def load_kokoro_model(engine: str):
     """Load the Kokoro model for the given engine ('mlx' or 'onnx').
 
@@ -78,23 +124,10 @@ def load_kokoro_model(engine: str):
 
     elif engine == "onnx":
         print("Loading Kokoro model (ONNX)...")
-        from huggingface_hub import hf_hub_download
         from kokoro_onnx import Kokoro
 
-        cache_dir = Path.home() / ".cache" / "kokoro"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-
-        onnx_path = hf_hub_download(
-            repo_id="hexgrad/Kokoro-82M-ONNX",
-            filename="kokoro-v1.0.onnx",
-            local_dir=str(cache_dir),
-        )
-        voices_path = hf_hub_download(
-            repo_id="hexgrad/Kokoro-82M-ONNX",
-            filename="voices-v1.0.bin",
-            local_dir=str(cache_dir),
-        )
-        _kokoro_model = Kokoro(onnx_path, voices_path)
+        model_path, voices_path = ensure_onnx_files()
+        _kokoro_model = Kokoro(str(model_path), str(voices_path))
         print("Kokoro ONNX model loaded!")
 
     else:
@@ -106,6 +139,22 @@ def load_kokoro_model(engine: str):
 def get_kokoro_model():
     """Return the loaded Kokoro model instance."""
     return _kokoro_model
+
+
+def _get_mlx_pipeline(model, lang_prefix: str):
+    """Return a cached MLX KokoroPipeline, or None to use model.generate().
+
+    Uses the model's private pipeline accessor; if mlx-audio changes that
+    API, synthesis falls back to the (slower) public generate() path.
+    """
+    pipe = _mlx_pipelines.get(lang_prefix)
+    if pipe is None:
+        try:
+            pipe = model._get_pipeline(lang_prefix)
+        except Exception:
+            return None
+        _mlx_pipelines[lang_prefix] = pipe
+    return pipe
 
 
 def generate_speech_kokoro(
@@ -143,13 +192,26 @@ def generate_speech_kokoro(
     audio_parts = []
     chunks_total = len(chunks)
 
+    mlx_pipeline = _get_mlx_pipeline(model, lang_prefix) if engine == "mlx" else None
+
     for idx, chunk in enumerate(chunks):
         if engine == "mlx":
-            # model.generate() is a generator yielding GenerationResult objects;
-            # each result has an .audio float32 numpy array.
-            parts = [np.array(r.audio) for r in model.generate(
-                chunk, voice=kokoro_id, speed=speed, lang_code=lang_prefix
-            )]
+            if mlx_pipeline is not None:
+                # Fast path: call the pipeline directly.  model.generate()
+                # resets the pipeline's voice cache and flushes the Metal
+                # buffer cache on every call — per-chunk overhead we avoid by
+                # keeping one pipeline warm for the whole chapter.
+                parts = [
+                    np.atleast_1d(np.array(r.audio).squeeze())
+                    for r in mlx_pipeline(chunk, voice=kokoro_id, speed=speed)
+                    if r.audio is not None
+                ]
+            else:
+                # model.generate() is a generator yielding GenerationResult
+                # objects; each result has an .audio float32 array.
+                parts = [np.atleast_1d(np.array(r.audio).squeeze()) for r in model.generate(
+                    chunk, voice=kokoro_id, speed=speed, lang_code=lang_prefix
+                )]
             raw = np.concatenate(parts) if parts else np.array([], dtype=np.float32)
         else:  # onnx
             # kokoro_onnx returns (numpy_float32_array, sample_rate)
@@ -163,5 +225,15 @@ def generate_speech_kokoro(
 
         if chunk_callback:
             chunk_callback(idx + 1, chunks_total)
+
+    if engine == "mlx":
+        # Trim the Metal buffer cache once per call (chapter) instead of the
+        # per-segment flush model.generate() would do, so memory stays bounded
+        # without paying reallocation cost on every chunk.
+        try:
+            import mlx.core as mx  # noqa: PLC0415
+            mx.clear_cache()
+        except Exception:
+            pass
 
     return np.concatenate(audio_parts), SAMPLE_RATE

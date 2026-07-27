@@ -15,7 +15,8 @@ Inkvoice converts EPUB ebooks into audiobooks (MP3 or M4B) using Kokoro TTS runn
 | `tts.py` | Public TTS API — `generate_speech()`, speed resampling, text chunking at sentence boundaries |
 | `kokoro_tts.py` | Kokoro model loading (MLX and ONNX), voice catalogue, `generate_speech_kokoro()` |
 | `text_processor.py` | Gemini-powered text cleaning (deletion-only) and summarization |
-| `setup_kokoro.py` | Downloads ONNX model weights from GitHub releases on first run |
+| `setup_kokoro.py` | Downloads model weights on first run (MLX from Hugging Face, ONNX from the kokoro-onnx GitHub release) |
+| `benchmark_tts.py` | Measures synthesis speed of the active engine (run before/after upgrades) |
 | `templates/index.html` | Entire web UI — single HTML file, vanilla JS, no build step |
 | `cli.py` | Typer CLI, thin wrapper over the same conversion pipeline |
 

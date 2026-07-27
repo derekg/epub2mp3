@@ -55,7 +55,7 @@ git clone https://github.com/derekg/epub2mp3.git
 cd epub2mp3
 pip install -r requirements.txt
 
-# Download Kokoro model weights (first run only, ~180 MB)
+# Download Kokoro model weights (first run only; ~160 MB MLX, ~340 MB ONNX)
 python setup_kokoro.py
 
 # Optional: M4B support
@@ -126,6 +126,20 @@ python cli.py voices
 On Apple Silicon (M-series) via MLX, Kokoro runs at ~13–18× real-time — a 10-hour audiobook typically takes 45 minutes to 1.5 hours to generate. On non-Apple hardware via ONNX the same job takes several hours.
 
 Only one book is processed at a time to avoid GPU/NPU contention; additional jobs queue automatically and start as soon as the active one finishes.
+
+To measure synthesis speed on your machine (e.g. before and after a dependency upgrade):
+
+```bash
+python benchmark_tts.py            # default voice
+python benchmark_tts.py heart      # specific voice
+```
+
+Notes from benchmarking the ONNX engine on x86 CPU: the quantized model
+variants that kokoro-onnx publishes did not pay off there (fp16 was within
+noise of fp32; int8 was several times *slower*), and parallel chunk synthesis
+gains nothing because ONNX Runtime already saturates all cores. If you have
+an NVIDIA GPU, `pip install kokoro-onnx[gpu]` enables CUDA, which is several
+times faster than CPU.
 
 ## Project Structure
 

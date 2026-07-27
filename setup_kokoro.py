@@ -10,7 +10,6 @@ Engine priority (same as tts.py):
 """
 
 import sys
-from pathlib import Path
 
 
 def detect_engine() -> str | None:
@@ -54,32 +53,17 @@ def download_mlx() -> bool:
 
 def download_onnx() -> bool:
     print("Engine: Kokoro ONNX (cross-platform)")
-    cache_dir = Path.home() / ".cache" / "kokoro"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Cache directory: {cache_dir}")
 
     try:
-        from huggingface_hub import hf_hub_download
         from kokoro_onnx import Kokoro
+        from kokoro_tts import ensure_onnx_files
 
-        print("Downloading kokoro-v1.0.onnx ...")
-        onnx_path = hf_hub_download(
-            repo_id="hexgrad/Kokoro-82M-ONNX",
-            filename="kokoro-v1.0.onnx",
-            local_dir=str(cache_dir),
-        )
-        print(f"  Saved: {onnx_path}")
-
-        print("Downloading voices-v1.0.bin ...")
-        voices_path = hf_hub_download(
-            repo_id="hexgrad/Kokoro-82M-ONNX",
-            filename="voices-v1.0.bin",
-            local_dir=str(cache_dir),
-        )
-        print(f"  Saved: {voices_path}")
+        onnx_path, voices_path = ensure_onnx_files()
+        print(f"  Model:  {onnx_path}")
+        print(f"  Voices: {voices_path}")
 
         print("Loading model ...")
-        model = Kokoro(onnx_path, voices_path)
+        model = Kokoro(str(onnx_path), str(voices_path))
 
         print("Smoke-testing synthesis (short phrase) ...")
         audio, sr = model.create("Hello.", voice="af_heart", speed=1.0, lang="en-us")
@@ -105,7 +89,7 @@ def main():
         print(
             "\nNo Kokoro engine found. Install one of:\n"
             "  Apple Silicon:  pip install mlx-audio\n"
-            "  Cross-platform: pip install kokoro-onnx huggingface_hub\n"
+            "  Cross-platform: pip install kokoro-onnx\n"
         )
         sys.exit(1)
 

@@ -9,9 +9,8 @@ typer
 rich
 # TTS engine — install ONE of the following:
 #   Apple Silicon:  pip install mlx-audio
-#   Cross-platform: pip install kokoro-onnx huggingface_hub
+#   Cross-platform: pip install kokoro-onnx
 kokoro-onnx
-huggingface_hub
 google-genai  # For Gemini text processing (clean, summarize, speed read)
 python-dotenv  # For loading .env file
 numpy  # For audio processing

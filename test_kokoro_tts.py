@@ -5,12 +5,26 @@ they mock the model calls so no GPU/download is required.
 """
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
 import kokoro_tts
 import tts
+
+
+def _make_mlx_model(chunk_audio: np.ndarray) -> MagicMock:
+    """Mock an mlx-audio Kokoro model: pipeline fast path + generate fallback.
+
+    Both the pipeline call and model.generate() yield result objects with an
+    .audio array, matching the real mlx-audio API.
+    """
+    model = MagicMock()
+    result = SimpleNamespace(audio=chunk_audio)
+    model._get_pipeline.return_value.return_value = [result]
+    model.generate.return_value = [result]
+    return model
 
 
 # ---------------------------------------------------------------------------
@@ -98,11 +112,11 @@ class TestGenerateSpeechKokoro(unittest.TestCase):
     def test_mlx_callback_fires_per_chunk(self):
         chunks = ["First chunk text.", "Second chunk text.", "Third chunk text."]
         calls: list[tuple[int, int]] = []
-        mock_model = MagicMock()
-        mock_model.generate.return_value = self._make_float_audio()
+        mock_model = _make_mlx_model(self._make_float_audio())
 
         with (
             patch("kokoro_tts._kokoro_model", mock_model),
+            patch.dict(kokoro_tts._mlx_pipelines, clear=True),
             patch("tts._split_text_into_chunks", return_value=chunks),
         ):
             audio, sr = kokoro_tts.generate_speech_kokoro(
@@ -119,11 +133,11 @@ class TestGenerateSpeechKokoro(unittest.TestCase):
         self.assertEqual(sr, kokoro_tts.SAMPLE_RATE)
 
     def test_mlx_no_callback_no_error(self):
-        mock_model = MagicMock()
-        mock_model.generate.return_value = self._make_float_audio()
+        mock_model = _make_mlx_model(self._make_float_audio())
 
         with (
             patch("kokoro_tts._kokoro_model", mock_model),
+            patch.dict(kokoro_tts._mlx_pipelines, clear=True),
             patch("tts._split_text_into_chunks", return_value=["one chunk"]),
         ):
             audio, sr = kokoro_tts.generate_speech_kokoro(
@@ -133,10 +147,11 @@ class TestGenerateSpeechKokoro(unittest.TestCase):
         self.assertIsInstance(audio, np.ndarray)
 
     def test_mlx_empty_text_returns_empty_array(self):
-        mock_model = MagicMock()
+        mock_model = _make_mlx_model(self._make_float_audio())
 
         with (
             patch("kokoro_tts._kokoro_model", mock_model),
+            patch.dict(kokoro_tts._mlx_pipelines, clear=True),
             patch("tts._split_text_into_chunks", return_value=[]),
         ):
             audio, sr = kokoro_tts.generate_speech_kokoro(
@@ -168,14 +183,46 @@ class TestGenerateSpeechKokoro(unittest.TestCase):
         self.assertEqual([c[0] for c in calls], [1, 2])
         mock_model.create.assert_called()
 
-    # -- Audio format --
-
-    def test_output_is_int16(self):
-        mock_model = MagicMock()
-        mock_model.generate.return_value = self._make_float_audio()
+    def test_mlx_falls_back_to_generate_without_pipeline(self):
+        """If the private pipeline accessor is missing, model.generate() is used."""
+        mock_model = _make_mlx_model(self._make_float_audio())
+        del mock_model._get_pipeline
 
         with (
             patch("kokoro_tts._kokoro_model", mock_model),
+            patch.dict(kokoro_tts._mlx_pipelines, clear=True),
+            patch("tts._split_text_into_chunks", return_value=["one chunk"]),
+        ):
+            audio, sr = kokoro_tts.generate_speech_kokoro(
+                "text", "heart", 1.0, None, "mlx",
+            )
+
+        mock_model.generate.assert_called_once()
+        self.assertEqual(audio.dtype, np.int16)
+
+    def test_mlx_pipeline_cached_across_chunks(self):
+        """The pipeline is fetched once per call, not once per chunk."""
+        mock_model = _make_mlx_model(self._make_float_audio())
+
+        with (
+            patch("kokoro_tts._kokoro_model", mock_model),
+            patch.dict(kokoro_tts._mlx_pipelines, clear=True),
+            patch("tts._split_text_into_chunks", return_value=["a", "b", "c"]),
+        ):
+            kokoro_tts.generate_speech_kokoro("a b c", "heart", 1.0, None, "mlx")
+
+        mock_model._get_pipeline.assert_called_once()
+        mock_model.generate.assert_not_called()
+        self.assertEqual(mock_model._get_pipeline.return_value.call_count, 3)
+
+    # -- Audio format --
+
+    def test_output_is_int16(self):
+        mock_model = _make_mlx_model(self._make_float_audio())
+
+        with (
+            patch("kokoro_tts._kokoro_model", mock_model),
+            patch.dict(kokoro_tts._mlx_pipelines, clear=True),
             patch("tts._split_text_into_chunks", return_value=["text"]),
         ):
             audio, _ = kokoro_tts.generate_speech_kokoro(
@@ -186,12 +233,12 @@ class TestGenerateSpeechKokoro(unittest.TestCase):
 
     def test_silence_inserted_between_chunks(self):
         """Audio with 2 chunks must be longer than a single chunk."""
-        mock_model = MagicMock()
         single_chunk_samples = 1200
-        mock_model.generate.return_value = np.zeros(single_chunk_samples, dtype=np.float32)
+        mock_model = _make_mlx_model(np.zeros(single_chunk_samples, dtype=np.float32))
 
         with (
             patch("kokoro_tts._kokoro_model", mock_model),
+            patch.dict(kokoro_tts._mlx_pipelines, clear=True),
             patch("tts._split_text_into_chunks", return_value=["a", "b"]),
         ):
             audio, sr = kokoro_tts.generate_speech_kokoro(
