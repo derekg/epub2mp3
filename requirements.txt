@@ -11,6 +11,7 @@ rich
 #   Apple Silicon:  pip install mlx-audio
 #   Cross-platform: pip install kokoro-onnx
 kokoro-onnx
-google-genai  # For Gemini text processing (clean, summarize, speed read)
+openai  # OpenRouter client for LLM text processing (clean, summarize, speed read)
+google-genai  # Optional direct-Gemini fallback for text processing
 python-dotenv  # For loading .env file
 numpy  # For audio processing

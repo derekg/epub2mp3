@@ -3,15 +3,20 @@ Tests for text integrity throughout the conversion pipeline.
 
 Covers three potential loss points:
   1. TTS chunking  — _split_text_into_chunks must preserve every word
-  2. Gemini cleaning — clean mode should retain ≥80% of content words;
-                       speed/summary modes intentionally reduce (tested for
-                       correct ratio, not preservation)
+  2. LLM cleaning  — clean mode should retain ≥80% of content words;
+                     speed/summary modes intentionally reduce (tested for
+                     correct ratio, not preservation)
   3. Basic cleaning  — clean_text_basic must preserve actual prose words
 """
 
+import os
 import re
+from types import SimpleNamespace
+
 import pytest
 from unittest.mock import MagicMock, patch
+
+import text_processor
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -222,9 +227,9 @@ class TestBasicCleaningPreservation:
 # 4. Gemini clean mode — mocked to verify word-count tracking
 # ---------------------------------------------------------------------------
 
-class TestGeminiCleanWordCount:
+class TestLLMCleanWordCount:
     """
-    With Gemini mocked, verify that:
+    With the LLM backend mocked (OpenRouter-style), verify that:
     - clean mode returns text with ≥80% of original word count
     - speed mode returns text closer to 30% of original
     - summary mode returns text closer to 10% of original
@@ -232,21 +237,32 @@ class TestGeminiCleanWordCount:
     """
 
     def _make_mock_client(self, response_text: str):
-        mock_resp = MagicMock()
-        mock_resp.text = response_text
         mock_client = MagicMock()
-        mock_client.models.generate_content.return_value = mock_resp
+        mock_client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(
+                message=SimpleNamespace(content=response_text),
+                finish_reason="stop",
+            )]
+        )
         return mock_client
 
+    def _backend(self, mock_client):
+        """Patch env + client so the openrouter backend is active and mocked."""
+        return (
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key", "GEMINI_API_KEY": ""}),
+            patch.object(text_processor, "OPENAI_SDK_AVAILABLE", True),
+            patch.object(text_processor, "_get_client", return_value=mock_client),
+        )
+
     def test_clean_mode_high_retention_mocked(self):
-        """Clean mode is deletion-only: mocked Gemini returns 95%+ of words."""
+        """Clean mode is deletion-only: mocked LLM returns 95%+ of words."""
         from text_processor import process_chapter, ProcessingMode
         original = CHAPTER_SAMPLE
         original_words = _word_count(original)
         # Clean mode should only strip artifacts; mock returns 95% (artifacts removed)
         reduced = " ".join(original.split()[:int(original_words * 0.95)])
-        mock_client = self._make_mock_client(reduced)
-        with patch("text_processor.get_client", return_value=mock_client):
+        p1, p2, p3 = self._backend(self._make_mock_client(reduced))
+        with p1, p2, p3:
             result = process_chapter(original, "Test Chapter", ProcessingMode.CLEAN)
         result_words = _word_count(result)
         assert result_words >= original_words * 0.93, (
@@ -254,27 +270,28 @@ class TestGeminiCleanWordCount:
             f"({result_words/original_words:.1%}), expected ≥93% (deletion-only)"
         )
 
-    def test_clean_mode_no_gemini_falls_back_to_basic(self):
-        """If Gemini is not configured, process_chapter uses clean_text_basic."""
+    def test_clean_mode_no_llm_falls_back_to_basic(self):
+        """If no LLM is configured, process_chapter uses clean_text_basic."""
         from text_processor import process_chapter, ProcessingMode
-        with patch("text_processor.get_client", return_value=None):
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "", "GEMINI_API_KEY": ""}):
             result = process_chapter(CHAPTER_SAMPLE, "Test", ProcessingMode.CLEAN)
         # Basic cleaning keeps ≥85% of words
         ratio = _word_count(result) / _word_count(CHAPTER_SAMPLE)
         assert ratio >= 0.85, f"Fallback basic clean kept only {ratio:.1%} of words"
 
-    def test_clean_mode_gemini_error_falls_back(self):
-        """If Gemini throws an exception mid-chunk, result still contains text."""
+    def test_clean_mode_llm_error_falls_back(self):
+        """If the LLM throws an exception mid-chunk, result still contains text."""
         from text_processor import process_chapter, ProcessingMode
         mock_client = MagicMock()
-        mock_client.models.generate_content.side_effect = Exception("API error")
-        with patch("text_processor.get_client", return_value=mock_client):
+        mock_client.chat.completions.create.side_effect = Exception("API error")
+        p1, p2, p3 = self._backend(mock_client)
+        with p1, p2, p3:
             result = process_chapter(CHAPTER_SAMPLE, "Test", ProcessingMode.CLEAN)
         # Should fall back to basic cleaning, not return empty string
-        assert _word_count(result) > 0, "Gemini error caused all text to be lost"
+        assert _word_count(result) > 0, "LLM error caused all text to be lost"
         ratio = _word_count(result) / _word_count(CHAPTER_SAMPLE)
         assert ratio >= 0.80, (
-            f"Gemini error fallback kept only {ratio:.1%} of words"
+            f"LLM error fallback kept only {ratio:.1%} of words"
         )
 
     def test_none_mode_returns_text_unchanged(self):
@@ -291,16 +308,18 @@ class TestGeminiCleanWordCount:
         target_30 = " ".join(original.split()[:int(original_words * 0.30)])
 
         call_count = [0]
-        def _mock_generate(model, contents, config):
+        def _mock_create(**kwargs):
             call_count[0] += 1
-            r = MagicMock()
             # First call = clean (return as-is), second = summarize (return 30%)
-            r.text = original if call_count[0] == 1 else target_30
-            return r
+            content = original if call_count[0] == 1 else target_30
+            return SimpleNamespace(choices=[SimpleNamespace(
+                message=SimpleNamespace(content=content), finish_reason="stop",
+            )])
 
         mock_client = MagicMock()
-        mock_client.models.generate_content.side_effect = _mock_generate
-        with patch("text_processor.get_client", return_value=mock_client):
+        mock_client.chat.completions.create.side_effect = _mock_create
+        p1, p2, p3 = self._backend(mock_client)
+        with p1, p2, p3:
             result = process_chapter(original, "Test", ProcessingMode.SPEED_READ)
         result_words = _word_count(result)
         # Should be approximately 30% of original
@@ -356,7 +375,11 @@ class TestDurationEstimateAccuracy:
         # Deletion-only: mock returns 95% of words (only artifacts removed)
         mock_output = " ".join(original.split()[:int(original_words * 0.95)])
         mock_client = self._make_mock_client(mock_output)
-        with patch("text_processor.get_client", return_value=mock_client):
+        with (
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key", "GEMINI_API_KEY": ""}),
+            patch.object(text_processor, "OPENAI_SDK_AVAILABLE", True),
+            patch.object(text_processor, "_get_client", return_value=mock_client),
+        ):
             result = process_chapter(original, "Test", ProcessingMode.CLEAN)
         result_words = _word_count(result)
         original_est = self._estimated_minutes(original_words)
@@ -368,10 +391,13 @@ class TestDurationEstimateAccuracy:
         )
 
     def _make_mock_client(self, response_text: str):
-        mock_resp = MagicMock()
-        mock_resp.text = response_text
         mock_client = MagicMock()
-        mock_client.models.generate_content.return_value = mock_resp
+        mock_client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(
+                message=SimpleNamespace(content=response_text),
+                finish_reason="stop",
+            )]
+        )
         return mock_client
 
 

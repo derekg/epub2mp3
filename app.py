@@ -1,4 +1,4 @@
-"""FastAPI server for EPUB to MP3 conversion using Gemini TTS."""
+"""FastAPI server for EPUB to MP3 conversion using Kokoro TTS."""
 
 import asyncio
 import concurrent.futures
@@ -22,7 +22,7 @@ import lameenc
 import numpy as np
 
 from converter import convert_epub_to_mp3, parse_epub, BUILTIN_VOICES, is_ffmpeg_available
-from text_processor import ProcessingMode, is_gemini_available
+from text_processor import ProcessingMode, get_model, is_llm_available
 from tts import (
     get_voice_list, generate_preview, is_tts_available, load_model,
     VOICES, DEFAULT_VOICE, SAMPLE_RATE
@@ -461,7 +461,7 @@ async def index():
 
 @app.get("/api/voices")
 async def get_voices():
-    """Return list of available Gemini TTS voices with metadata."""
+    """Return list of available Kokoro TTS voices with metadata."""
     return {
         "voices": get_voice_list(),
         "default": DEFAULT_VOICE,
@@ -474,7 +474,7 @@ voice_preview_cache: dict[str, bytes] = {}
 
 @app.get("/api/voice-preview/{voice}")
 async def get_voice_preview(voice: str):
-    """Generate a short audio preview for a voice using Gemini TTS."""
+    """Generate a short audio preview for a voice using Kokoro TTS."""
     from fastapi.responses import Response
 
     if voice not in VOICES:
@@ -489,7 +489,7 @@ async def get_voice_preview(voice: str):
         )
 
     try:
-        # Generate preview using Gemini TTS
+        # Generate preview using Kokoro TTS
         audio_np, sample_rate = await asyncio.to_thread(generate_preview, voice)
 
         # Convert to MP3
@@ -528,7 +528,8 @@ async def get_capabilities():
             "m4b": is_ffmpeg_available(),
         },
         "ffmpeg_available": is_ffmpeg_available(),
-        "gemini_available": is_gemini_available(),
+        "llm_available": is_llm_available(),
+        "llm_model": get_model() if is_llm_available() else None,
         "tts_available": is_tts_available(),
         "tts_engine": "Kokoro TTS (local)",
         "text_processing_modes": [
@@ -697,7 +698,7 @@ async def start_conversion(
     """Start EPUB to audio conversion (MP3 or M4B) using Kokoro TTS."""
     # Check TTS availability
     if not is_tts_available():
-        raise HTTPException(status_code=503, detail="Gemini TTS not configured. Set GEMINI_API_KEY environment variable.")
+        raise HTTPException(status_code=503, detail="No TTS engine available. Install mlx-audio or kokoro-onnx and run setup_kokoro.py.")
 
     # Validate output format
     output_format = output_format.lower()

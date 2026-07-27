@@ -14,7 +14,7 @@ Inkvoice converts EPUB ebooks into audiobooks (MP3 or M4B) using Kokoro TTS runn
 | `converter.py` | EPUB parsing, chapter extraction, text-to-audio pipeline, MP3/M4B encoding |
 | `tts.py` | Public TTS API — `generate_speech()`, speed resampling, text chunking at sentence boundaries |
 | `kokoro_tts.py` | Kokoro model loading (MLX and ONNX), voice catalogue, `generate_speech_kokoro()` |
-| `text_processor.py` | Gemini-powered text cleaning (deletion-only) and summarization |
+| `text_processor.py` | LLM text cleaning (deletion-only) and summarization — OpenRouter (default `google/gemini-2.5-flash-lite`) or direct Gemini API |
 | `setup_kokoro.py` | Downloads model weights on first run (MLX from Hugging Face, ONNX from the kokoro-onnx GitHub release) |
 | `benchmark_tts.py` | Measures synthesis speed of the active engine (run before/after upgrades) |
 | `templates/index.html` | Entire web UI — single HTML file, vanilla JS, no build step |
@@ -36,7 +36,7 @@ app.py  (FastAPI)
            ▼
      run_conversion()  (asyncio background task)
            │
-           ├── text_processor.process_chapter()   [optional Gemini]
+           ├── text_processor.process_chapter()   [optional LLM]
            └── converter.convert_epub_to_mp3()
                     │
                     └── tts.generate_speech()
@@ -68,7 +68,7 @@ All TTS work runs via `loop.run_in_executor(TTS_EXECUTOR, ...)`.
 
 The TTS model has practical limits per call. `tts._split_text_into_chunks()` splits at sentence boundaries (`.!?;`), targeting ~500 words per chunk, with word-boundary fallback for sentences that exceed the limit.
 
-`text_processor.clean_text_with_gemini()` also chunks by paragraph for chapters that exceed Gemini's effective output limit (~2000 words per call in practice). If a chunk's output is less than 85% of input words, it retries with the chunk halved.
+`text_processor.clean_text_with_llm()` also chunks by paragraph for chapters that exceed the model's effective output limit. If a chunk's output is less than 85% of input words, it retries with the chunk halved.
 
 ## Persistent storage
 

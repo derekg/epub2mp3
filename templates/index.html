@@ -1803,7 +1803,7 @@
 
             <footer>
                 Powered by <a href="https://github.com/remsky/Kokoro-FastAPI" target="_blank">Kokoro TTS</a>
-                and <a href="https://ai.google.dev/" target="_blank">Gemini</a>
+                and <a href="https://openrouter.ai/" target="_blank">OpenRouter</a>
             </footer>
         </div>
 
@@ -1865,7 +1865,8 @@
         let uploadId       = null;
         let chapters       = [];
         let m4bAvailable   = false;
-        let geminiAvailable= false;
+        let llmAvailable   = false;
+        let llmModel       = null;
         let ttsAvailable   = false;
         let previewAudio   = null;
         let voiceData      = [];
@@ -2342,14 +2343,15 @@
                     ? 'M4B audiobook (single file with chapters)'
                     : 'M4B (requires ffmpeg — not installed)';
 
-                geminiAvailable = data.gemini_available;
-                ttsAvailable    = data.tts_available;
+                llmAvailable = data.llm_available;
+                llmModel     = data.llm_model;
+                ttsAvailable = data.tts_available;
 
-                if (geminiAvailable) {
+                if (llmAvailable) {
                     textProcessingSelect.value = 'clean';
                     processingNote.style.display = 'block';
                     processingNote.className = 'processing-note ready';
-                    processingNote.textContent = 'Gemini removes footnotes, URLs, and non-spoken content';
+                    processingNote.textContent = `${llmModel} removes footnotes, URLs, and non-spoken content`;
                 }
 
                 if (!ttsAvailable) {
@@ -2426,22 +2428,22 @@
                 processingNote.style.display = 'none';
             } else if (mode === 'clean') {
                 processingNote.style.display = 'block';
-                processingNote.className = 'processing-note ' + (geminiAvailable ? 'ready' : 'warning');
-                processingNote.textContent = geminiAvailable
-                    ? 'Gemini removes footnotes, URLs, and non-spoken content'
-                    : 'Gemini not configured — basic cleanup only';
+                processingNote.className = 'processing-note ' + (llmAvailable ? 'ready' : 'warning');
+                processingNote.textContent = llmAvailable
+                    ? `${llmModel} removes footnotes, URLs, and non-spoken content`
+                    : 'No LLM configured — basic cleanup only';
             } else if (mode === 'speed') {
                 processingNote.style.display = 'block';
-                processingNote.className = 'processing-note ' + (geminiAvailable ? 'ready' : 'warning');
-                processingNote.textContent = geminiAvailable
-                    ? 'Gemini condenses while preserving key information'
-                    : 'Requires Gemini API key';
+                processingNote.className = 'processing-note ' + (llmAvailable ? 'ready' : 'warning');
+                processingNote.textContent = llmAvailable
+                    ? `${llmModel} condenses while preserving key information`
+                    : 'Requires an OpenRouter or Gemini API key';
             } else {
                 processingNote.style.display = 'block';
-                processingNote.className = 'processing-note ' + (geminiAvailable ? 'ready' : 'warning');
-                processingNote.textContent = geminiAvailable
-                    ? 'Gemini extracts main ideas and conclusions'
-                    : 'Requires Gemini API key';
+                processingNote.className = 'processing-note ' + (llmAvailable ? 'ready' : 'warning');
+                processingNote.textContent = llmAvailable
+                    ? `${llmModel} extracts main ideas and conclusions`
+                    : 'Requires an OpenRouter or Gemini API key';
             }
             updateSelectionStats();
             // Refresh per-chapter durations
