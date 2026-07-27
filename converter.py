@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from text_processor import process_chapter, ProcessingMode, is_gemini_available
+from text_processor import process_chapter, ProcessingMode, is_llm_available
 from tts import (
     generate_speech, get_voice_list, is_tts_available,
     VOICES, DEFAULT_VOICE, SAMPLE_RATE
@@ -538,7 +538,7 @@ def add_id3_tags(
 
     # Add comment with voice info
     if voice:
-        tags["COMM"] = COMM(encoding=3, lang="eng", desc="Voice", text=f"Generated with Gemini TTS ({voice})")
+        tags["COMM"] = COMM(encoding=3, lang="eng", desc="Voice", text=f"Generated with Kokoro TTS ({voice})")
 
     # Add cover art
     if cover_image and cover_mime:
@@ -609,7 +609,7 @@ def convert_epub_to_mp3(
         skip_existing: If True, skip chapters that already have output files
         announce_chapters: If True, speak chapter title at start of each chapter
         output_format: "mp3" or "m4b" (M4B requires ffmpeg, creates single file with chapters)
-        text_processing: "none", "clean", "speed", or "summary" (uses Gemini)
+        text_processing: "none", "clean", "speed", or "summary" (uses the configured LLM)
         speed: Playback speed multiplier (0.75, 1.0, 1.25, 1.5, 2.0). Default 1.0.
 
     Returns:
@@ -637,11 +637,11 @@ def convert_epub_to_mp3(
                                 ProcessingMode.SPEED_READ, ProcessingMode.SUMMARY):
         text_processing = ProcessingMode.NONE
 
-    # Check if text processing requested but Gemini not configured
-    llm_available = is_gemini_available()
+    # Check if text processing requested but no LLM configured
+    llm_available = is_llm_available()
     if text_processing != ProcessingMode.NONE and not llm_available:
         if progress_callback:
-            progress_callback(0, 100, "Note: Gemini API not configured, using basic text cleaning", {"stage": "initializing"})
+            progress_callback(0, 100, "Note: no LLM configured, using basic text cleaning", {"stage": "initializing"})
 
     # Parse EPUB
     if progress_callback:

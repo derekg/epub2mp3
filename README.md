@@ -2,7 +2,7 @@
 
 Turn any EPUB into a beautifully narrated audiobook using on-device AI text-to-speech.
 
-Uses [Kokoro TTS](https://github.com/thewh1teagle/kokoro-onnx) (82M parameter model) for fast, high-quality local synthesis and [Gemini](https://ai.google.dev/) for optional text cleaning and summarization.
+Uses [Kokoro TTS](https://github.com/thewh1teagle/kokoro-onnx) (82M parameter model) for fast, high-quality local synthesis and an LLM (via [OpenRouter](https://openrouter.ai/) or the Gemini API) for optional text cleaning and summarization.
 
 ## Features
 
@@ -23,7 +23,7 @@ Uses [Kokoro TTS](https://github.com/thewh1teagle/kokoro-onnx) (82M parameter mo
 - **Chapter announcements** — Optionally speak chapter titles before each chapter
 - **Auto cleanup** — Temp files removed automatically after 1 hour
 - **Browser notifications** — Get notified when a book finishes, even with the tab in the background
-- **AI text processing** — Optional Gemini-powered modes:
+- **AI text processing** — Optional LLM-powered modes (OpenRouter or Gemini API):
   - **Narration-ready** — Remove footnotes, URLs, figure captions, page numbers
   - **Condensed** — ~30% shorter while preserving key information
   - **Key points** — ~10% summary of main ideas
@@ -46,7 +46,7 @@ Uses [Kokoro TTS](https://github.com/thewh1teagle/kokoro-onnx) (82M parameter mo
 - Python 3.11+
 - Apple Silicon Mac recommended (uses MLX for fast on-device inference; ONNX fallback works on any platform but is slower)
 - ffmpeg — optional, for M4B format (`brew install ffmpeg`)
-- Gemini API key — optional, for text cleaning and summarization
+- OpenRouter API key (or Gemini API key) — optional, for text cleaning and summarization
 
 ## Installation
 
@@ -55,15 +55,36 @@ git clone https://github.com/derekg/epub2mp3.git
 cd epub2mp3
 pip install -r requirements.txt
 
-# Download Kokoro model weights (first run only, ~180 MB)
+# Download Kokoro model weights (first run only; ~160 MB MLX, ~340 MB ONNX)
 python setup_kokoro.py
 
 # Optional: M4B support
 brew install ffmpeg
 
-# Optional: Gemini text processing
-echo "GEMINI_API_KEY=your_key_here" > .env
+# Optional: LLM text processing (clean / speed-read / summary modes)
+echo "OPENROUTER_API_KEY=your_key_here" > .env
 ```
+
+### Text processing model
+
+Text cleaning defaults to **`google/gemini-2.5-flash-lite`** via OpenRouter.
+This default is deliberate: clean mode re-emits the entire chapter (minus
+footnotes, page numbers, URLs, and other non-narration artifacts), so output
+tokens dominate cost, and the model must reproduce long passages word for
+word without paraphrasing. Flash-Lite does this reliably, supports 65k-token
+outputs, is fast, and costs about **$0.07 per 100k-word book** — roughly 7×
+cheaper than Gemini 3 Flash ($0.10/$0.40 vs $0.50/$3.00 per 1M tokens).
+
+Configuration (in `.env` or the environment):
+
+| Variable | Purpose |
+|----------|---------|
+| `OPENROUTER_API_KEY` | Preferred backend — any model on [openrouter.ai](https://openrouter.ai/models) |
+| `GEMINI_API_KEY` | Fallback backend — direct Gemini API (used when no OpenRouter key is set) |
+| `LLM_MODEL` | Override the model, e.g. `LLM_MODEL=openai/gpt-5-nano` (default: `google/gemini-2.5-flash-lite`) |
+
+To verify cleaning quality after changing models, run `python test_clean_diff.py your.epub`
+— it diffs original vs cleaned text so you can confirm only artifacts were removed.
 
 ## Usage
 
@@ -127,6 +148,20 @@ On Apple Silicon (M-series) via MLX, Kokoro runs at ~13–18× real-time — a 1
 
 Only one book is processed at a time to avoid GPU/NPU contention; additional jobs queue automatically and start as soon as the active one finishes.
 
+To measure synthesis speed on your machine (e.g. before and after a dependency upgrade):
+
+```bash
+python benchmark_tts.py            # default voice
+python benchmark_tts.py heart      # specific voice
+```
+
+Notes from benchmarking the ONNX engine on x86 CPU: the quantized model
+variants that kokoro-onnx publishes did not pay off there (fp16 was within
+noise of fp32; int8 was several times *slower*), and parallel chunk synthesis
+gains nothing because ONNX Runtime already saturates all cores. If you have
+an NVIDIA GPU, `pip install kokoro-onnx[gpu]` enables CUDA, which is several
+times faster than CPU.
+
 ## Project Structure
 
 ```
@@ -136,8 +171,9 @@ inkvoice/
 ├── converter.py        # EPUB parsing and audio encoding pipeline
 ├── tts.py              # TTS engine wrapper, speed resampling, text chunking
 ├── kokoro_tts.py       # Kokoro MLX/ONNX model interface and voice catalogue
-├── text_processor.py   # Gemini text cleaning and summarization
+├── text_processor.py   # LLM text cleaning and summarization (OpenRouter / Gemini)
 ├── setup_kokoro.py     # First-run model download script
+├── benchmark_tts.py    # TTS speed benchmark (run before/after upgrades)
 ├── templates/
 │   └── index.html      # Web UI (single-page app)
 ├── static/

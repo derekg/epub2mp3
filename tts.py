@@ -8,7 +8,7 @@ Run setup_kokoro.py once to download model files before first use.
 
 Install:
   Apple Silicon:  pip install mlx-audio
-  Cross-platform: pip install kokoro-onnx huggingface_hub
+  Cross-platform: pip install kokoro-onnx
 """
 
 import numpy as np
@@ -36,7 +36,7 @@ except (ImportError, AttributeError):
             "No Kokoro TTS engine found.\n"
             "Install one of:\n"
             "  Apple Silicon:  pip install mlx-audio\n"
-            "  Cross-platform: pip install kokoro-onnx huggingface_hub\n"
+            "  Cross-platform: pip install kokoro-onnx\n"
             "Then run: python setup_kokoro.py"
         ) from None
 

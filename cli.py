@@ -5,11 +5,14 @@ import sys
 from pathlib import Path
 
 import typer
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
+load_dotenv(Path(__file__).parent / ".env")
+
 from converter import convert_epub_to_mp3, BUILTIN_VOICES, is_ffmpeg_available
-from text_processor import ProcessingMode, is_gemini_available
+from text_processor import ProcessingMode, is_llm_available
 
 app = typer.Typer(
     name="inkvoice",
@@ -61,17 +64,17 @@ def convert(
     clean: bool = typer.Option(
         False,
         "--clean", "-c",
-        help="Clean text using Gemini (remove footnotes, artifacts). Requires GEMINI_API_KEY.",
+        help="Clean text using an LLM (remove footnotes, artifacts). Requires OPENROUTER_API_KEY or GEMINI_API_KEY.",
     ),
     speed_read: bool = typer.Option(
         False,
         "--speed-read",
-        help="Create condensed ~30% summary. Requires GEMINI_API_KEY.",
+        help="Create condensed ~30% summary. Requires OPENROUTER_API_KEY or GEMINI_API_KEY.",
     ),
     summary: bool = typer.Option(
         False,
         "--summary",
-        help="Create brief ~10% summary. Requires GEMINI_API_KEY.",
+        help="Create brief ~10% summary. Requires OPENROUTER_API_KEY or GEMINI_API_KEY.",
     ),
 ):
     """Convert an EPUB file to audiobook(s)."""
@@ -97,9 +100,9 @@ def convert(
     elif clean:
         text_processing = ProcessingMode.CLEAN
 
-    # Warn if Gemini not configured
-    if text_processing != ProcessingMode.NONE and not is_gemini_available():
-        console.print("[yellow]Warning:[/yellow] Gemini not configured. Set GEMINI_API_KEY for text processing.")
+    # Warn if no LLM configured
+    if text_processing != ProcessingMode.NONE and not is_llm_available():
+        console.print("[yellow]Warning:[/yellow] No LLM configured. Set OPENROUTER_API_KEY (or GEMINI_API_KEY) for text processing.")
         console.print("[dim]Using basic text cleaning as fallback.[/dim]")
 
     # Set output directory
@@ -185,15 +188,17 @@ def voices():
 
 @app.command()
 def models():
-    """Show text processing configuration (Gemini)."""
-    from text_processor import is_gemini_available as _gem
+    """Show text processing (LLM) configuration."""
+    from text_processor import get_backend, get_model
 
-    console.print("[bold]Text processing:[/bold] Gemini Flash")
-    if _gem():
-        console.print("[green]✓[/green] Gemini API key configured")
+    backend = get_backend()
+    if backend:
+        console.print(f"[bold]Text processing:[/bold] {get_model()} via {backend}")
+        console.print(f"[green]✓[/green] {backend} API key configured")
+        console.print("[dim]Override the model with LLM_MODEL in your .env file.[/dim]")
     else:
-        console.print("[yellow]✗[/yellow] GEMINI_API_KEY not set — text processing unavailable")
-        console.print("[dim]Set GEMINI_API_KEY in your .env file or environment.[/dim]")
+        console.print("[yellow]✗[/yellow] No LLM configured — text processing unavailable")
+        console.print("[dim]Set OPENROUTER_API_KEY (or GEMINI_API_KEY) in your .env file or environment.[/dim]")
 
 
 @app.command()

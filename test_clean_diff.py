@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare original vs cleaned text to verify Gemini cleaning quality."""
+"""Compare original vs cleaned text to verify LLM cleaning quality."""
 
 import difflib
 import sys
@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
-from text_processor import clean_text_with_gemini, clean_text_basic, is_gemini_available
+from text_processor import clean_text_with_llm, clean_text_basic, get_model, is_llm_available
 from converter import parse_epub
 
 
@@ -85,13 +85,13 @@ def compare_chapter(original: str, title: str = "Chapter"):
     print(f"   Est tokens: {orig_tokens:,}")
     print(f"   Context %:  {orig_tokens / 1_000_000 * 100:.2f}% of 1M input limit")
 
-    # Clean with Gemini
-    print(f"\n🔄 Cleaning with Gemini 3 Flash...")
+    # Clean with the configured LLM
+    print(f"\n🔄 Cleaning with {get_model()}...")
 
     def progress(msg):
         print(f"   {msg}")
 
-    cleaned = clean_text_with_gemini(original, progress)
+    cleaned = clean_text_with_llm(original, progress)
 
     # Stats after
     clean_chars = char_count(cleaned)
@@ -261,11 +261,11 @@ if __name__ == "__main__":
     print("TEXT CLEANING COMPARISON TOOL")
     print("=" * 60)
 
-    if not is_gemini_available():
-        print("\n❌ ERROR: Gemini API not available. Set GEMINI_API_KEY.")
+    if not is_llm_available():
+        print("\n❌ ERROR: No LLM configured. Set OPENROUTER_API_KEY (or GEMINI_API_KEY).")
         sys.exit(1)
 
-    print("\n✅ Gemini API available")
+    print(f"\n✅ LLM available: {get_model()}")
 
     # Check for EPUB argument
     if len(sys.argv) > 1:
