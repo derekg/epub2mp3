@@ -171,8 +171,9 @@ inkvoice/
 ├── converter.py        # EPUB parsing and audio encoding pipeline
 ├── tts.py              # TTS engine wrapper, speed resampling, text chunking
 ├── kokoro_tts.py       # Kokoro MLX/ONNX model interface and voice catalogue
-├── text_processor.py   # Gemini text cleaning and summarization
+├── text_processor.py   # LLM text cleaning and summarization (OpenRouter / Gemini)
 ├── setup_kokoro.py     # First-run model download script
+├── benchmark_tts.py    # TTS speed benchmark (run before/after upgrades)
 ├── templates/
 │   └── index.html      # Web UI (single-page app)
 ├── static/
