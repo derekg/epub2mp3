@@ -426,10 +426,12 @@ def create_m4b_with_chapters(
         else:
             cmd.extend(['-map', '0:a'])
 
-        # Output settings for M4B (AAC in MP4 container)
+        # Output settings for M4B (AAC in MP4 container).  64 kbps AAC is
+        # transparent for 24 kHz mono TTS speech — the source has no content
+        # above 12 kHz and only one channel.
         cmd.extend([
             '-c:a', 'aac',
-            '-b:a', '128k',
+            '-b:a', '64k',
             '-ar', str(sample_rate),
             '-ac', '1',
         ])
@@ -482,7 +484,7 @@ def text_to_audio(
     return generate_speech(text, voice, speed=speed, chunk_callback=chunk_callback)
 
 
-def convert_wav_to_mp3(wav_data: np.ndarray, sample_rate: int, output_path: str, bitrate: int = 192):
+def convert_wav_to_mp3(wav_data: np.ndarray, sample_rate: int, output_path: str, bitrate: int = 64):
     """Convert WAV numpy array to MP3 file using lameenc."""
     # Normalize to int16
     if wav_data.dtype != np.int16:
@@ -591,7 +593,7 @@ def convert_epub_to_mp3(
     output_format: str = "mp3",
     text_processing: str = "none",
     speed: float = 1.0,
-    bitrate: int = 192,
+    bitrate: int = 64,
     checkpoint_dir: Path | None = None,
 ) -> list[str]:
     """

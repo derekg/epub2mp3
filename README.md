@@ -13,7 +13,7 @@ Uses [Kokoro TTS](https://github.com/thewh1teagle/kokoro-onnx) (82M parameter mo
 - **Chapter selection** — Choose exactly which chapters to include
 - **Estimated listening time** — Updates live as you select or deselect chapters
 - **Narration speed** — 0.75×, 1×, 1.25×, 1.5×, 2×
-- **Bitrate selection** — 64 / 128 / 192 kbps
+- **Bitrate selection** — 64 / 128 / 192 kbps (default 64: Kokoro outputs 24 kHz mono speech, for which 64 kbps is transparent — a 10-hour book is ~290 MB instead of ~865 MB at 192)
 - **M4B audiobook format** — Single file with embedded chapter markers (requires ffmpeg)
 - **MP3 with metadata** — ID3 tags with title, author, chapter number, and cover art
 - **Multi-job queue** — Start another book while the first is still converting
