@@ -34,13 +34,13 @@ class TestConvertWavToMp3Signature:
             "convert_wav_to_mp3 is missing the 'bitrate' parameter"
         )
 
-    def test_convert_wav_to_mp3_bitrate_default_192(self):
-        """convert_wav_to_mp3's bitrate parameter must default to 192."""
+    def test_convert_wav_to_mp3_bitrate_default_64(self):
+        """convert_wav_to_mp3's bitrate defaults to 64 (transparent for 24 kHz mono speech)."""
         from converter import convert_wav_to_mp3
         sig = inspect.signature(convert_wav_to_mp3)
         param = sig.parameters["bitrate"]
-        assert param.default == 192, (
-            f"Expected default bitrate 192, got {param.default}"
+        assert param.default == 64, (
+            f"Expected default bitrate 64, got {param.default}"
         )
 
     def test_convert_epub_to_mp3_has_bitrate_param(self):
@@ -51,13 +51,13 @@ class TestConvertWavToMp3Signature:
             "convert_epub_to_mp3 is missing the 'bitrate' parameter"
         )
 
-    def test_convert_epub_to_mp3_bitrate_default_192(self):
-        """convert_epub_to_mp3's bitrate parameter must default to 192."""
+    def test_convert_epub_to_mp3_bitrate_default_64(self):
+        """convert_epub_to_mp3's bitrate parameter must default to 64."""
         from converter import convert_epub_to_mp3
         sig = inspect.signature(convert_epub_to_mp3)
         param = sig.parameters["bitrate"]
-        assert param.default == 192, (
-            f"Expected default bitrate 192, got {param.default}"
+        assert param.default == 64, (
+            f"Expected default bitrate 64, got {param.default}"
         )
 
 
@@ -164,8 +164,8 @@ class TestBitrateAPIEndpoint:
             "start_conversion is missing the 'bitrate' parameter"
         )
 
-    def test_bitrate_default_is_192(self):
-        """start_conversion's bitrate parameter must default to 192."""
+    def test_bitrate_default_is_64(self):
+        """start_conversion's bitrate parameter must default to 64."""
         from app import start_conversion
         sig = inspect.signature(start_conversion)
         param = sig.parameters["bitrate"]
@@ -177,8 +177,8 @@ class TestBitrateAPIEndpoint:
             actual = default.default
         else:
             actual = default
-        assert actual == 192, (
-            f"Expected default bitrate 192 in start_conversion, got {actual}"
+        assert actual == 64, (
+            f"Expected default bitrate 64 in start_conversion, got {actual}"
         )
 
     def test_run_conversion_has_bitrate_param(self):

@@ -692,7 +692,7 @@ async def start_conversion(
     output_format: str = Form("mp3"),  # mp3 or m4b
     text_processing: str = Form("none"),  # none, clean, speed, summary
     speed: float = Form(1.0),  # Playback speed multiplier
-    bitrate: int = Form(192),  # MP3 bitrate: 64, 128, 192
+    bitrate: int = Form(64),  # MP3 bitrate: 64, 128, 192
     epub_file: UploadFile = File(None),  # For backwards compatibility
 ):
     """Start EPUB to audio conversion (MP3 or M4B) using Kokoro TTS."""
@@ -813,7 +813,7 @@ async def run_conversion(
     output_format: str = "mp3",
     text_processing: str = "none",
     speed: float = 1.0,
-    bitrate: int = 192,
+    bitrate: int = 64,
     checkpoint_dir: Path = None,
 ):
     """Run the conversion in the background using Kokoro TTS."""
