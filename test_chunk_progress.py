@@ -145,6 +145,22 @@ class TestConverterChunkProgress(unittest.TestCase):
         tts_calls = [s for s in progress_calls if s == "tts"]
         self.assertGreaterEqual(len(tts_calls), 2)
 
+    def test_chunk_callback_invokes_activity_throttle(self):
+        """Every chunk callback pings activity_monitor.throttle_pause(), even
+        with no progress_callback wired up — this is what lets a running
+        conversion back off while the Mac is actively being used."""
+
+        def fake_text_to_audio(text, voice=None, speed=1.0, chunk_callback=None):
+            if chunk_callback:
+                for i in range(1, 4):
+                    chunk_callback(i, 3)
+            return self._make_audio_response()
+
+        with patch("converter.activity_monitor.throttle_pause") as mock_throttle:
+            self._run_convert(progress_cb=None, fake_text_to_audio=fake_text_to_audio)
+
+        self.assertGreaterEqual(mock_throttle.call_count, 3)
+
 
 if __name__ == "__main__":
     unittest.main()

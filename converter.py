@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+import activity_monitor
 from text_processor import process_chapter, ProcessingMode, is_llm_available
 from tts import (
     generate_speech, get_voice_list, is_tts_available,
@@ -313,6 +314,157 @@ def is_ffmpeg_available() -> bool:
     return shutil.which('ffmpeg') is not None
 
 
+class _RawPcmStreamWriter:
+    """Appends int16 PCM chunks to a headerless raw audio file.
+
+    A RIFF/WAV container's chunk-size fields are 32-bit, capping a standard
+    WAV file at ~4 GiB (~24.8 hours of 24kHz mono int16 audio) — long
+    audiobooks blew past that and crashed the `wave` module with
+    "'L' format requires 0 <= number <= 4294967295" partway through a run.
+    Writing headerless PCM and telling ffmpeg its format explicitly (-f
+    s16le) avoids that ceiling entirely.
+    """
+
+    def __init__(self, path):
+        self._file = open(path, 'wb')
+
+    def write(self, audio: np.ndarray) -> None:
+        if audio.dtype != np.int16:
+            audio = (audio * 32767).astype(np.int16)
+        self._file.write(audio.tobytes())
+
+    def close(self) -> None:
+        self._file.close()
+
+
+class Mp3StreamWriter:
+    """Incrementally encodes int16 PCM chunks to an MP3 file.
+
+    Avoids buffering an entire audiobook's audio in memory before encoding —
+    each chunk (e.g. one chapter) is fed to lameenc and released as soon as
+    it's written.
+    """
+
+    def __init__(self, output_path: str, sample_rate: int, bitrate: int = 64):
+        self._file = open(output_path, 'wb')
+        self._encoder = lameenc.Encoder()
+        self._encoder.set_bit_rate(bitrate)
+        self._encoder.set_in_sample_rate(sample_rate)
+        self._encoder.set_out_sample_rate(sample_rate)
+        self._encoder.set_channels(1)
+        self._encoder.set_quality(2)  # 2 = high quality
+        self._wrote_any = False
+
+    def write(self, audio: np.ndarray) -> None:
+        if audio.dtype != np.int16:
+            audio = (audio * 32767).astype(np.int16)
+        self._wrote_any = True
+        self._file.write(self._encoder.encode(audio.tobytes()))
+
+    def close(self) -> None:
+        # lameenc.flush() raises if encode() was never called (e.g. every
+        # chapter produced empty audio) — nothing to flush in that case.
+        if self._wrote_any:
+            self._file.write(self._encoder.flush())
+        self._file.close()
+
+
+def _mux_m4b_from_pcm(
+    pcm_path: Path,
+    chapters: list[tuple[int, int, str]],  # (start_ms, end_ms, title)
+    output_path: str,
+    sample_rate: int,
+    title: str,
+    author: str,
+    temp_dir: Path,
+    total_duration_secs: float,
+    cover_image: bytes = None,
+    cover_mime: str = None,
+) -> tuple[bool, str]:
+    """Mux an already-written raw PCM file plus chapter markers into an M4B via ffmpeg."""
+    if not chapters:
+        return (False, "No audio segments provided")
+
+    # Create ffmpeg metadata file for chapters
+    metadata_path = temp_dir / "metadata.txt"
+    with open(metadata_path, 'w') as f:
+        f.write(";FFMETADATA1\n")
+        f.write(f"title={title}\n")
+        f.write(f"artist={author}\n")
+        f.write(f"album={title}\n")
+        f.write("genre=Audiobook\n")
+        f.write("\n")
+
+        for start_ms, end_ms, chapter_title in chapters:
+            f.write("[CHAPTER]\n")
+            f.write("TIMEBASE=1/1000\n")
+            f.write(f"START={start_ms}\n")
+            f.write(f"END={end_ms}\n")
+            f.write(f"title={chapter_title}\n")
+            f.write("\n")
+
+    # Build ffmpeg command - all inputs first, then output options.
+    # The PCM input is headerless, so its format must be given explicitly.
+    cmd = [
+        'ffmpeg', '-y',
+        '-f', 's16le', '-ar', str(sample_rate), '-ac', '1',
+        '-i', str(pcm_path),
+        '-i', str(metadata_path),
+    ]
+
+    # Add cover image input if available
+    cover_path = None
+    if cover_image and cover_mime:
+        ext = 'jpg' if 'jpeg' in cover_mime else 'png'
+        cover_path = temp_dir / f"cover.{ext}"
+        with open(cover_path, 'wb') as f:
+            f.write(cover_image)
+        cmd.extend(['-i', str(cover_path)])
+
+    # Now add output options (after all inputs)
+    cmd.extend(['-map_metadata', '1'])
+
+    if cover_image and cover_mime:
+        cmd.extend(['-map', '0:a', '-map', '2:v'])
+        cmd.extend(['-disposition:v:0', 'attached_pic'])
+    else:
+        cmd.extend(['-map', '0:a'])
+
+    # Output settings for M4B (AAC in MP4 container).  64 kbps AAC is
+    # transparent for 24 kHz mono TTS speech — the source has no content
+    # above 12 kHz and only one channel.
+    cmd.extend([
+        '-c:a', 'aac',
+        '-b:a', '64k',
+        '-ar', str(sample_rate),
+        '-ac', '1',
+    ])
+
+    # For cover art, copy the image as-is (don't re-encode to video)
+    if cover_image and cover_mime:
+        cmd.extend(['-c:v', 'copy'])
+
+    cmd.append(str(output_path))
+
+    # Conservative: encode at 5x real-time (slow hardware / large files)
+    timeout = max(600, int(total_duration_secs / 5))
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if result.returncode != 0:
+            return (False, f"ffmpeg error: {result.stderr}")
+        return (True, None)
+    except subprocess.TimeoutExpired:
+        return (False, f"ffmpeg timed out after {timeout // 60} minutes")
+    except subprocess.SubprocessError as e:
+        return (False, f"ffmpeg exception: {e}")
+
+
 def create_m4b_with_chapters(
     audio_segments: list[tuple[str, np.ndarray]],  # (chapter_title, audio_data)
     output_path: str,
@@ -342,125 +494,42 @@ def create_m4b_with_chapters(
 
     with tempfile.TemporaryDirectory(prefix="epub2mp3_m4b_") as temp_dir:
         temp_dir = Path(temp_dir)
+        pcm_path = temp_dir / "audio.pcm"
 
-        # Write all audio to a single WAV file and track chapter positions
-        all_audio = []
+        # Stream each segment straight to the raw PCM file instead of
+        # concatenating the whole book in memory first.
         chapters = []  # (start_ms, end_ms, title)
         current_pos_ms = 0
-
-        for chapter_title, audio_data in audio_segments:
-            if len(audio_data) == 0:
-                continue
-
-            start_ms = current_pos_ms
-            duration_ms = int(len(audio_data) / sample_rate * 1000)
-            end_ms = start_ms + duration_ms
-
-            chapters.append((start_ms, end_ms, chapter_title))
-            all_audio.append(audio_data)
-
-            # Add 500ms silence between chapters
-            silence = np.zeros(int(sample_rate * 0.5), dtype=audio_data.dtype)
-            all_audio.append(silence)
-            current_pos_ms = end_ms + 500
-
-        if not all_audio:
-            return (False, "No audio segments provided")
-
-        # Concatenate all audio
-        combined = np.concatenate(all_audio)
-
-        # Normalize to int16
-        if combined.dtype != np.int16:
-            combined = (combined * 32767).astype(np.int16)
-
-        # Write temporary WAV file
-        wav_path = temp_dir / "audio.wav"
-        import wave
-        with wave.open(str(wav_path), 'wb') as wav_file:
-            wav_file.setnchannels(1)
-            wav_file.setsampwidth(2)  # 16-bit
-            wav_file.setframerate(sample_rate)
-            wav_file.writeframes(combined.tobytes())
-
-        # Create ffmpeg metadata file for chapters
-        metadata_path = temp_dir / "metadata.txt"
-        with open(metadata_path, 'w') as f:
-            f.write(";FFMETADATA1\n")
-            f.write(f"title={title}\n")
-            f.write(f"artist={author}\n")
-            f.write(f"album={title}\n")
-            f.write("genre=Audiobook\n")
-            f.write("\n")
-
-            for start_ms, end_ms, chapter_title in chapters:
-                f.write("[CHAPTER]\n")
-                f.write("TIMEBASE=1/1000\n")
-                f.write(f"START={start_ms}\n")
-                f.write(f"END={end_ms}\n")
-                f.write(f"title={chapter_title}\n")
-                f.write("\n")
-
-        # Build ffmpeg command - all inputs first, then output options
-        cmd = [
-            'ffmpeg', '-y',
-            '-i', str(wav_path),
-            '-i', str(metadata_path),
-        ]
-
-        # Add cover image input if available
-        cover_path = None
-        if cover_image and cover_mime:
-            ext = 'jpg' if 'jpeg' in cover_mime else 'png'
-            cover_path = temp_dir / f"cover.{ext}"
-            with open(cover_path, 'wb') as f:
-                f.write(cover_image)
-            cmd.extend(['-i', str(cover_path)])
-
-        # Now add output options (after all inputs)
-        cmd.extend(['-map_metadata', '1'])
-
-        if cover_image and cover_mime:
-            cmd.extend(['-map', '0:a', '-map', '2:v'])
-            cmd.extend(['-disposition:v:0', 'attached_pic'])
-        else:
-            cmd.extend(['-map', '0:a'])
-
-        # Output settings for M4B (AAC in MP4 container).  64 kbps AAC is
-        # transparent for 24 kHz mono TTS speech — the source has no content
-        # above 12 kHz and only one channel.
-        cmd.extend([
-            '-c:a', 'aac',
-            '-b:a', '64k',
-            '-ar', str(sample_rate),
-            '-ac', '1',
-        ])
-
-        # For cover art, copy the image as-is (don't re-encode to video)
-        if cover_image and cover_mime:
-            cmd.extend(['-c:v', 'copy'])
-
-        cmd.append(str(output_path))
-
-        total_samples = sum(len(audio) for _, audio in audio_segments)
-        total_duration_secs = total_samples / sample_rate
-        # Conservative: encode at 5x real-time (slow hardware / large files)
-        timeout = max(600, int(total_duration_secs / 5))
-
+        writer = _RawPcmStreamWriter(pcm_path)
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-            if result.returncode != 0:
-                return (False, f"ffmpeg error: {result.stderr}")
-            return (True, None)
-        except subprocess.TimeoutExpired:
-            return (False, f"ffmpeg timed out after {timeout // 60} minutes")
-        except subprocess.SubprocessError as e:
-            return (False, f"ffmpeg exception: {e}")
+            for chapter_title, audio_data in audio_segments:
+                if len(audio_data) == 0:
+                    continue
+
+                start_ms = current_pos_ms
+                duration_ms = int(len(audio_data) / sample_rate * 1000)
+                end_ms = start_ms + duration_ms
+                chapters.append((start_ms, end_ms, chapter_title))
+                writer.write(audio_data)
+
+                # Add 500ms silence between chapters
+                writer.write(np.zeros(int(sample_rate * 0.5), dtype=np.int16))
+                current_pos_ms = end_ms + 500
+        finally:
+            writer.close()
+
+        return _mux_m4b_from_pcm(
+            pcm_path=pcm_path,
+            chapters=chapters,
+            output_path=output_path,
+            sample_rate=sample_rate,
+            title=title,
+            author=author,
+            temp_dir=temp_dir,
+            total_duration_secs=current_pos_ms / 1000,
+            cover_image=cover_image,
+            cover_mime=cover_mime,
+        )
 
 
 def text_to_audio(
@@ -824,12 +893,15 @@ def convert_epub_to_mp3(
                     pause = np.zeros(int(sample_rate * 0.8), dtype=announcement.dtype)
                     chapter_audio_parts.append(pause)
 
-            # Build a chunk-level progress closure so the bar moves every
-            # ~2-3 seconds instead of once per chapter.
-            if progress_callback and total_words > 0:
-                _cw, _t, _wp = chapter_words, title, words_processed
+            # Chunk-level closure: paces TTS generation when the Mac is
+            # actively in use (see activity_monitor) and, when a progress
+            # callback is wired up, moves the bar every ~2-3 seconds instead
+            # of once per chapter.
+            _cw, _t, _wp = chapter_words, title, words_processed
 
-                def _chunk_cb(done: int, total: int) -> None:
+            def _chunk_cb(done: int, total: int) -> None:
+                activity_monitor.throttle_pause()
+                if progress_callback and total_words > 0:
                     wp = _wp + int(done / total * _cw)
                     pct = 10 + int((wp / total_words) * 85)
                     chapter_pct = int(done / total * 100)
@@ -837,8 +909,6 @@ def convert_epub_to_mp3(
                         pct, 100, f"Converting: {_t[:25]}... {chapter_pct}%",
                         {**chapter_details, "stage": "tts", "words_processed": wp},
                     )
-            else:
-                _chunk_cb = None
 
             # Generate chapter content audio
             content_audio, _ = text_to_audio(text, voice, speed=speed, chunk_callback=_chunk_cb)
@@ -880,7 +950,11 @@ def convert_epub_to_mp3(
             # Update words processed after chapter completes
             words_processed += chapter_words
     else:
-        # Single combined file (MP3 or M4B)
+        # Single combined file (MP3 or M4B).  Each chapter's audio is streamed
+        # straight to disk as soon as it's synthesized instead of being kept
+        # around for the whole book — holding a full audiobook's raw PCM in
+        # memory (hours of int16 @ 24kHz) is what was driving OOMs on long
+        # books.
         if progress_callback:
             format_name = "M4B audiobook" if output_format == "m4b" else "combined MP3"
             progress_callback(10, 100, f"Creating {format_name}...", {
@@ -889,8 +963,33 @@ def convert_epub_to_mp3(
                 "words_total": total_words,
             })
 
-        # For M4B, we need to track chapter segments separately
-        chapter_segments = []  # (chapter_title, audio_data)
+        safe_title = re.sub(r'[^\w\s-]', '', book.title)[:100].strip()
+        if not safe_title:
+            safe_title = "audiobook"
+
+        silence_chunk = np.zeros(int(sample_rate * 0.5), dtype=np.int16)
+        any_audio = False
+
+        m4b_temp_dir = None
+        if output_format == "m4b":
+            output_path = output_dir / f"{safe_title}.m4b"
+            # Nested under output_dir (part of the job's own working
+            # directory) rather than the system temp dir: this staging area
+            # lives for the whole conversion — hours, for a long book — and
+            # the background orphan-dir cleanup only tracks/protects each
+            # job's top-level temp dir, not directories created deeper in
+            # the pipeline. A directory living directly in system temp would
+            # look "orphaned" after 2 hours and get deleted out from under
+            # an in-progress job.
+            m4b_temp_dir = output_dir / ".m4b_staging"
+            m4b_temp_dir.mkdir(parents=True, exist_ok=True)
+            pcm_path = m4b_temp_dir / "audio.pcm"
+            writer = _RawPcmStreamWriter(pcm_path)
+            m4b_chapters = []  # (start_ms, end_ms, title)
+            current_pos_ms = 0
+        else:
+            output_path = output_dir / f"{safe_title}.mp3"
+            writer = Mp3StreamWriter(str(output_path), sample_rate, bitrate)
 
         for idx, chapter in enumerate(selected_chapters):
             title = chapter.title
@@ -934,11 +1033,14 @@ def convert_epub_to_mp3(
                     pause = np.zeros(int(sample_rate * 0.8), dtype=announcement.dtype)
                     chapter_audio_parts.append(pause)
 
-            # Build chunk-level progress closure for combined-file mode.
-            if progress_callback and total_words > 0:
-                _cw, _t, _wp = chapter_words, title, words_processed
+            # Chunk-level closure: paces TTS generation when the Mac is
+            # actively in use (see activity_monitor) and, when a progress
+            # callback is wired up, drives progress for combined-file mode.
+            _cw, _t, _wp = chapter_words, title, words_processed
 
-                def _chunk_cb(done: int, total: int) -> None:
+            def _chunk_cb(done: int, total: int) -> None:
+                activity_monitor.throttle_pause()
+                if progress_callback and total_words > 0:
                     wp = _wp + int(done / total * _cw)
                     pct = 10 + int((wp / total_words) * 80)
                     chapter_pct = int(done / total * 100)
@@ -946,8 +1048,6 @@ def convert_epub_to_mp3(
                         pct, 100, f"Converting: {_t[:25]}... {chapter_pct}%",
                         {**chapter_details, "stage": "tts", "words_processed": wp},
                     )
-            else:
-                _chunk_cb = None
 
             content_audio, _ = text_to_audio(text, voice, speed=speed, chunk_callback=_chunk_cb)
             if len(content_audio) > 0:
@@ -955,21 +1055,29 @@ def convert_epub_to_mp3(
 
             if chapter_audio_parts:
                 chapter_audio = np.concatenate(chapter_audio_parts)
-                chapter_segments.append((title, chapter_audio))
+                del chapter_audio_parts
+                any_audio = True
+
+                if output_format == "m4b":
+                    start_ms = current_pos_ms
+                    duration_ms = int(len(chapter_audio) / sample_rate * 1000)
+                    m4b_chapters.append((start_ms, start_ms + duration_ms, title))
+                    writer.write(chapter_audio)
+                    writer.write(silence_chunk)
+                    current_pos_ms = start_ms + duration_ms + 500
+                else:
+                    writer.write(chapter_audio)
+                    writer.write(silence_chunk)
+
+                del chapter_audio
 
             # Update words processed after chapter completes
             words_processed += chapter_words
 
-        if chapter_segments:
-            # Sanitize filename
-            safe_title = re.sub(r'[^\w\s-]', '', book.title)[:100].strip()
-            if not safe_title:
-                safe_title = "audiobook"
+        writer.close()
 
+        if any_audio:
             if output_format == "m4b":
-                # Create M4B with embedded chapter markers
-                output_path = output_dir / f"{safe_title}.m4b"
-
                 if progress_callback:
                     progress_callback(95, 100, "Creating M4B with chapters...", {
                         "stage": "encoding",
@@ -979,12 +1087,15 @@ def convert_epub_to_mp3(
                         "words_total": total_words,
                     })
 
-                success, error_msg = create_m4b_with_chapters(
-                    audio_segments=chapter_segments,
+                success, error_msg = _mux_m4b_from_pcm(
+                    pcm_path=pcm_path,
+                    chapters=m4b_chapters,
                     output_path=str(output_path),
                     sample_rate=sample_rate,
                     title=book.title,
                     author=book.author,
+                    temp_dir=m4b_temp_dir,
+                    total_duration_secs=current_pos_ms / 1000,
                     cover_image=book.cover_image,
                     cover_mime=book.cover_mime,
                 )
@@ -994,17 +1105,6 @@ def convert_epub_to_mp3(
 
                 output_files.append(str(output_path))
             else:
-                # Combined MP3
-                all_audio = []
-                for _, audio in chapter_segments:
-                    all_audio.append(audio)
-                    # Add a short pause between chapters
-                    silence = np.zeros(int(sample_rate * 0.5), dtype=audio.dtype)
-                    all_audio.append(silence)
-
-                combined_audio = np.concatenate(all_audio)
-                output_path = output_dir / f"{safe_title}.mp3"
-
                 if progress_callback:
                     progress_callback(95, 100, "Saving MP3...", {
                         "stage": "encoding",
@@ -1014,7 +1114,6 @@ def convert_epub_to_mp3(
                         "words_total": total_words,
                     })
 
-                convert_wav_to_mp3(combined_audio, sample_rate, str(output_path), bitrate)
                 add_id3_tags(
                     str(output_path),
                     title=book.title,
@@ -1025,6 +1124,13 @@ def convert_epub_to_mp3(
                     cover_mime=book.cover_mime,
                 )
                 output_files.append(str(output_path))
+        elif output_path.exists():
+            # No chapter produced audio — remove the empty file the writer
+            # created rather than surfacing a bogus zero-length output.
+            output_path.unlink()
+
+        if m4b_temp_dir is not None:
+            shutil.rmtree(m4b_temp_dir, ignore_errors=True)
 
     if progress_callback:
         final_details = {

@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 import lameenc
 import numpy as np
 
+import activity_monitor
 from converter import convert_epub_to_mp3, parse_epub, BUILTIN_VOICES, is_ffmpeg_available
 from text_processor import ProcessingMode, get_model, is_llm_available
 from tts import (
@@ -600,6 +601,7 @@ async def get_stats():
         "active_jobs": active_jobs,
         "completed_jobs": completed_jobs,
         "total_disk_usage_mb": round(total_bytes / (1024 * 1024), 2),
+        "activity_throttle": activity_monitor.get_status(),
     }
 
 

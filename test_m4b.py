@@ -230,7 +230,7 @@ class TestConvertEpubToMp3M4B:
         ]
 
     def test_output_dir_created_before_m4b(self, tmp_path):
-        """output_dir.mkdir is called before create_m4b_with_chapters."""
+        """output_dir.mkdir is called before the M4B audio is muxed."""
         from converter import convert_epub_to_mp3
 
         out_dir = tmp_path / "output"  # does NOT exist yet
@@ -241,7 +241,7 @@ class TestConvertEpubToMp3M4B:
             return (True, None)
 
         with self._patches()[0], self._patches()[1], \
-             patch("converter.create_m4b_with_chapters", side_effect=spy_m4b), \
+             patch("converter._mux_m4b_from_pcm", side_effect=spy_m4b), \
              patch("converter.is_ffmpeg_available", return_value=True):
             convert_epub_to_mp3(
                 epub_path="/fake/test.epub",
@@ -250,14 +250,14 @@ class TestConvertEpubToMp3M4B:
             )
 
         assert created_before_m4b.get("exists") is True, \
-            "output_dir must exist when create_m4b_with_chapters is called"
+            "output_dir must exist when the M4B audio is muxed"
 
     def test_m4b_raises_on_ffmpeg_failure(self, tmp_path):
         """convert_epub_to_mp3 raises ValueError when M4B creation fails."""
         from converter import convert_epub_to_mp3
 
         with self._patches()[0], self._patches()[1], \
-             patch("converter.create_m4b_with_chapters", return_value=(False, "ffmpeg exploded")), \
+             patch("converter._mux_m4b_from_pcm", return_value=(False, "ffmpeg exploded")), \
              patch("converter.is_ffmpeg_available", return_value=True):
             with pytest.raises(ValueError, match="Failed to create M4B"):
                 convert_epub_to_mp3(
