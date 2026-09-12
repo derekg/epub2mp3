@@ -148,6 +148,21 @@ On Apple Silicon (M-series) via MLX, Kokoro runs at ~13–18× real-time — a 1
 
 Only one book is processed at a time to avoid GPU/NPU contention; additional jobs queue automatically and start as soon as the active one finishes.
 
+### Adaptive throttling
+
+TTS generation is CPU/GPU-heavy. To avoid making the rest of the machine
+sluggish while you're using it, the server checks (via macOS's HID idle
+time) whether anyone is actively at the keyboard/mouse and pauses briefly
+between chunks if so — full speed resumes automatically once the machine
+goes idle. Current state is visible at `GET /api/stats` under
+`activity_throttle`. Tune it with env vars (or add them to `.env`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `EPUB2MP3_ADAPTIVE_THROTTLE` | `1` | Set to `0` to disable and always run at full speed |
+| `EPUB2MP3_IDLE_THRESHOLD_SECONDS` | `120` | Seconds of no input before the machine is considered idle |
+| `EPUB2MP3_ACTIVE_THROTTLE_SLEEP` | `0.4` | Pause (seconds) inserted between chunks while the machine is actively in use |
+
 To measure synthesis speed on your machine (e.g. before and after a dependency upgrade):
 
 ```bash
@@ -169,6 +184,7 @@ inkvoice/
 ├── app.py              # FastAPI web server and job management
 ├── cli.py              # Command-line interface (Typer)
 ├── converter.py        # EPUB parsing and audio encoding pipeline
+├── activity_monitor.py # Adaptive throttling based on macOS idle time
 ├── tts.py              # TTS engine wrapper, speed resampling, text chunking
 ├── kokoro_tts.py       # Kokoro MLX/ONNX model interface and voice catalogue
 ├── text_processor.py   # LLM text cleaning and summarization (OpenRouter / Gemini)
